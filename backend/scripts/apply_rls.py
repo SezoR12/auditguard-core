@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from app.database import engine
 
-MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "supabase" / "migrations"
+MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "db" / "migrations"
 
 
 async def main() -> None:
