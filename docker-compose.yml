@@ -1,0 +1,76 @@
+services:
+  # NOTE: Postgres is hosted on Supabase (external). No local postgres service.
+
+  redis:
+    image: redis:7-alpine
+    container_name: auditcore_redis
+    restart: unless-stopped
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - auditcore_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: auditcore_backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # DATABASE_URL is assembled from Supabase parts in app/config.py
+      SUPABASE_DB_HOST: ${SUPABASE_DB_HOST}
+      SUPABASE_DB_PORT: ${SUPABASE_DB_PORT}
+      SUPABASE_DB_NAME: ${SUPABASE_DB_NAME}
+      SUPABASE_DB_USER: ${SUPABASE_DB_USER}
+      SUPABASE_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - redis
+    networks:
+      - auditcore_net
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend.Dockerfile
+    container_name: auditcore_frontend
+    restart: unless-stopped
+    environment:
+      VITE_AUDITCORE_SUPABASE_URL: ${VITE_AUDITCORE_SUPABASE_URL}
+      VITE_AUDITCORE_SUPABASE_ANON_KEY: ${VITE_AUDITCORE_SUPABASE_ANON_KEY}
+      VITE_AUDITCORE_API_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+    networks:
+      - auditcore_net
+
+  baileys-bridge:
+    build:
+      context: ./baileys-bridge
+      dockerfile: Dockerfile
+    container_name: auditcore_baileys
+    restart: unless-stopped
+    expose:
+      - "3001"
+    networks:
+      - auditcore_net
+
+volumes:
+  redis_data:
+
+networks:
+  auditcore_net:
+    driver: bridge
