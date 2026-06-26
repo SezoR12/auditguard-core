@@ -1,15 +1,15 @@
 """AI engine: cross_reference_findings + output_type enum values + RLS
 
-Revision ID: 004_ai_engine
-Revises: 003_tasks_perf
+Revision ID: 005_ai_engine
+Revises: 004_supabase_auth
 Create Date: 2026-06-26
 """
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision = "004_ai_engine"
-down_revision = "003_tasks_perf"
+revision = "005_ai_engine"
+down_revision = "004_supabase_auth"
 branch_labels = None
 depends_on = None
 
