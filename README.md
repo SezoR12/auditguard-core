@@ -755,3 +755,48 @@ Schema only, per spec: `consolidated_entities` (subsidiary Smart Boxes) and
 - `tests/test_phase11_templates_db.py` — 13-check DB integration via the ASGI
   app: criteria, build template, preview PDF, client request → appowner inbox →
   deploy → client library → **generate live-data PDF**, plus auditor 403 + RLS.
+
+---
+
+# AuditCore — Sector-Metric Calculations (AI engine wiring)
+
+Phase 11 added the criteria library + template bindings; this wires the actual
+**computation** of sector metrics into the AI engine so custom reports show real
+numbers.
+
+## How it works
+- `app/ai/sector_metrics.py`:
+  - `safe_eval_formula` — a restricted-AST evaluator (no `eval`, no calls,
+    no attribute access, no names beyond provided variables) for the criteria
+    formulas. Returns `None` on missing variables or divide-by-zero.
+  - `collect_base_inputs` — aggregates the **extra numeric fields** auditors
+    capture in `extracted_data.fields` (beyond standard invoice fields), e.g.
+    `revenue`, `cogs`, `occupied_units`, `total_units`, `annual_rent`,
+    `property_value`, summed across all certified docs.
+  - `compute_sector_metrics` — evaluates every metric for the active sectors;
+    a metric is emitted only when **all** its variables exist (no misleading
+    partial numbers).
+  - `sectors_for_company` — maps the company's free-text sector (Arabic/English)
+    to criteria-library module keys.
+- `app/ai/common.py` — `InvoiceRecord` now carries `raw_fields` (the full parsed
+  field dict) so base variables are available.
+- `app/ai/orchestrator.py` — Step 7b computes `sector_metrics` and stores them in
+  the daily snapshot's `data.sector_metrics` (which `template_engine.resolve_data`
+  and the Owner dashboard already read), and returns them from the run.
+
+## Example
+A real-estate company whose certified reports carry `occupied_units` /
+`total_units` / `annual_rent` / `property_value`:
+- `occupancy_rate = Σoccupied / Σtotal × 100`
+- `rental_yield = annual_rent / property_value × 100`
+These appear automatically in any template that binds `occupancy_rate` /
+`rental_yield`.
+
+## Tests
+- `tests/test_phase12_sector_metrics.py` — 20 checks: safe evaluator (incl.
+  injection/attribute-access rejection, div-by-zero), base-input aggregation,
+  real computations (occupancy 75%, margin 40%, inventory_turnover 3), and
+  sector mapping.
+- `tests/test_phase12_sector_metrics_db.py` — 7-check integration: real-estate
+  company → analysis computes occupancy 85% / rental_yield 8% → persisted in the
+  snapshot → template engine resolves them → custom-report PDF renders.

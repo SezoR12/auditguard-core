@@ -217,6 +217,12 @@ async def run_analysis_for_company(company_id: uuid.UUID | str) -> dict:
         coverage = trust_mod.coverage_ratio(len(docs), total_docs)
         tindex = trust_mod.trust_index(q_score, coverage, len(anomalies), len(records))
 
+        # Step 7b: sector-specific metrics (OEE, occupancy, food_cost, ...)
+        from app.ai.sector_metrics import compute_sector_metrics, sectors_for_company
+
+        sectors = sectors_for_company(company.sector)
+        sector_metrics = compute_sector_metrics(records, sectors)
+
         # Step 8: daily snapshot
         total_waste = sum(float(w.amount_iqd) for w in waste)
         snapshot = AnalyticsOutput(
@@ -238,6 +244,8 @@ async def run_analysis_for_company(company_id: uuid.UUID | str) -> dict:
                     "predictions": len(predictions),
                 },
                 "total_waste_iqd": round(total_waste, 2),
+                "sectors": sectors,
+                "sector_metrics": sector_metrics,
             },
         )
         session.add(snapshot)
@@ -256,6 +264,7 @@ async def run_analysis_for_company(company_id: uuid.UUID | str) -> dict:
             "narratives": len(narratives),
             "trust_index": tindex,
             "total_waste_iqd": round(total_waste, 2),
+            "sector_metrics": sector_metrics,
         }
 
 

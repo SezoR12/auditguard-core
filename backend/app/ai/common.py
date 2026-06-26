@@ -65,6 +65,9 @@ class InvoiceRecord:
     vendor_name: str | None
     items: list[dict] = field(default_factory=list)
     branch_id: str | None = None
+    # Full parsed fields dict (incl. any sector-specific base variables like
+    # revenue, cogs, occupied_units...). Used by sector_metrics.
+    raw_fields: dict = field(default_factory=dict)
 
 
 def _seq_from_invoice(num: str | None) -> int | None:
@@ -97,6 +100,7 @@ def record_from_document(doc: dict) -> InvoiceRecord:
         vendor_name=(fields.get("vendor_name") or None),
         items=fields.get("items_list") or [],
         branch_id=str(doc["branch_id"]) if doc.get("branch_id") else None,
+        raw_fields=fields if isinstance(fields, dict) else {},
     )
 
 

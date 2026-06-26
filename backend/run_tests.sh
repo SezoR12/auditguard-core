@@ -40,6 +40,7 @@ PURE=(
   tests/test_phase8_notify.py
   tests/test_phase9_exports.py
   tests/test_phase11_templates.py
+  tests/test_phase12_sector_metrics.py
 )
 
 DB=(
@@ -48,6 +49,7 @@ DB=(
   tests/test_phase8_notify_db.py
   tests/test_phase9_exports_db.py
   tests/test_phase11_templates_db.py
+  tests/test_phase12_sector_metrics_db.py
 )
 
 run() {
