@@ -88,6 +88,8 @@ export function roleHomePath(role: CurrentUser["role"]): string {
     case "auditor": return "/auditor";
     case "manager": return "/manager";
     case "gm": return "/gm";
+    case "appowner": return "/appowner";
+    case "admin": return "/appowner";
     default: return "/";
   }
 }

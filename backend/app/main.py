@@ -11,6 +11,7 @@ from app.api.ledger import router as ledger_router
 from app.api.notifications import router as notifications_router
 from app.api.manager import router as manager_router
 from app.api.exports import router as exports_router
+from app.api.templates import router as templates_router
 from app.api.admin import router as admin_router
 from app.api.deps import require_role
 from app.config import settings
@@ -37,6 +38,7 @@ app.include_router(ledger_router)
 app.include_router(notifications_router)
 app.include_router(manager_router)
 app.include_router(exports_router)
+app.include_router(templates_router)
 app.include_router(admin_router)
 
 

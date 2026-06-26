@@ -701,3 +701,57 @@ air-gapped local-Postgres path is documented in DEPLOYMENT.md.)
   with Supabase Auth the browser authenticates against Supabase directly, so
   these belong in Supabase Auth settings + a frontend idle-logout. Tracked in
   SECURITY.md.
+
+---
+
+# AuditCore — Phase 11: No-Code Template Builder & CRaaS
+
+Revenue multiplier: the App Owner builds sector-specific report templates with
+no code and sells Custom Reports as a Service (CRaaS).
+
+## Backend
+- `services/criteria_library.py` — sector modules (Manufacturing OEE/defect_rate,
+  Restaurants food_cost/table_turnover, Real Estate rental_yield/occupancy,
+  Trading inventory_turnover/margin) as JSON schemas the builder toggles and the
+  AI engine can compute.
+- `services/template_engine.py` — renders a template JSON `config` (text / metric
+  / table / chart / image blocks with data bindings) into an Arabic RTL PDF
+  (bundled Amiri font); `resolve_data` builds the live data context from the
+  company's analytics + waste rows + sector metrics; `DUMMY` powers preview mode.
+- `models/template.py` + migration 007 (+ SQL mirror):
+  `report_templates`, `report_requests`, `custom_reports`, and the Elite-tier
+  `consolidated_entities` / `consolidated_metrics` **federation schema
+  (architecture only)**. CRaaS client tables are RLS auditor-hidden.
+- `api/templates.py`:
+  - App Owner: `GET /templates/criteria`, `GET/POST/PUT /templates`,
+    `POST /templates/{id}/preview` (dummy-data PDF), `GET /admin/report-requests`,
+    `POST /admin/report-requests/{id}/deploy`.
+  - Client: `POST/GET /owner/report-requests`, `GET /owner/custom-reports`,
+    `POST /owner/custom-reports/{id}/generate` (live-data PDF).
+
+## Frontend
+- `/appowner` — no-code builder (name, sector toggles that inject metric blocks,
+  add/remove text/table/chart/image/metric blocks), saved-templates list with
+  PDF preview, and the **CRaaS request inbox** with one-click deploy.
+- `/owner/custom-reports` — client requests a custom report
+  ([طلب تقرير تحليلي مخصص]), sees request status, and generates PDF from any
+  deployed report with their live data.
+- Role routing: `appowner`/`admin` land on `/appowner`.
+
+## Acceptance criteria — verified
+- ✅ App Owner builds a template without code (JSON config via the UI) + preview.
+- ✅ Template deployed to the client → appears in their Custom Reports library.
+- ✅ Client generates a PDF from the custom template with their live data.
+- ✅ Auditors are excluded (403 + RLS) from templates/requests/custom-reports.
+
+## Multi-company consolidation (Elite)
+Schema only, per spec: `consolidated_entities` (subsidiary Smart Boxes) and
+`consolidated_metrics` (periodically federated aggregates). Federation transport
+(VPN/secure pull) is intentionally **not** implemented in the MVP.
+
+## Tests
+- `tests/test_phase11_templates.py` — 8 checks: criteria library + template→PDF
+  rendering (incl. chart/table blocks, empty config).
+- `tests/test_phase11_templates_db.py` — 13-check DB integration via the ASGI
+  app: criteria, build template, preview PDF, client request → appowner inbox →
+  deploy → client library → **generate live-data PDF**, plus auditor 403 + RLS.

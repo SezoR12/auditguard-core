@@ -57,6 +57,9 @@ export function OwnerShell({
             <Link to="/owner" className="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-accent">
               الرئيسية
             </Link>
+            <Link to="/owner/custom-reports" className="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-accent">
+              التقارير المخصصة
+            </Link>
             {onRefresh && (
               <button onClick={onRefresh} className="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-accent">
                 تحديث

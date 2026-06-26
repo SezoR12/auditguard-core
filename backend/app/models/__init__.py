@@ -16,6 +16,13 @@ from .auditor_performance import AuditorPerformance
 from .cross_reference import CrossReferenceFinding
 from .notification import Notification
 from .daily_digest import DailyDigest
+from .template import (
+    ConsolidatedEntity,
+    ConsolidatedMetric,
+    CustomReport,
+    ReportRequest,
+    ReportTemplate,
+)
 
 __all__ = [
     "UserRole", "CompanyTier", "TaskType", "TaskStatus", "FileType",
@@ -25,4 +32,6 @@ __all__ = [
     "DocumentCertification", "AuditLedger", "AnalyticsOutput",
     "WasteMapItem", "RiskAlert", "AuditorPerformance",
     "CrossReferenceFinding", "Notification", "DailyDigest",
+    "ReportTemplate", "ReportRequest", "CustomReport",
+    "ConsolidatedEntity", "ConsolidatedMetric",
 ]

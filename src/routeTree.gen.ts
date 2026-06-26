@@ -14,12 +14,14 @@ import { Route as ManagerRouteImport } from './routes/manager'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as GmRouteImport } from './routes/gm'
 import { Route as AuditorRouteImport } from './routes/auditor'
+import { Route as AppownerRouteImport } from './routes/appowner'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OwnerWhatIfRouteImport } from './routes/owner.what-if'
 import { Route as OwnerRawDataRouteImport } from './routes/owner.raw-data'
 import { Route as OwnerPerformanceRouteImport } from './routes/owner.performance'
 import { Route as OwnerLedgerRouteImport } from './routes/owner.ledger'
 import { Route as OwnerDepartmentsRouteImport } from './routes/owner.departments'
+import { Route as OwnerCustomReportsRouteImport } from './routes/owner.custom-reports'
 import { Route as OwnerAnalyticsRouteImport } from './routes/owner.analytics'
 import { Route as AuditorUploadRouteImport } from './routes/auditor.upload'
 import { Route as AuditorTasksRouteImport } from './routes/auditor.tasks'
@@ -48,6 +50,11 @@ const GmRoute = GmRouteImport.update({
 const AuditorRoute = AuditorRouteImport.update({
   id: '/auditor',
   path: '/auditor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppownerRoute = AppownerRouteImport.update({
+  id: '/appowner',
+  path: '/appowner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -80,6 +87,11 @@ const OwnerDepartmentsRoute = OwnerDepartmentsRouteImport.update({
   path: '/departments',
   getParentRoute: () => OwnerRoute,
 } as any)
+const OwnerCustomReportsRoute = OwnerCustomReportsRouteImport.update({
+  id: '/custom-reports',
+  path: '/custom-reports',
+  getParentRoute: () => OwnerRoute,
+} as any)
 const OwnerAnalyticsRoute = OwnerAnalyticsRouteImport.update({
   id: '/analytics',
   path: '/analytics',
@@ -103,6 +115,7 @@ const AuditorCertifyRoute = AuditorCertifyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/appowner': typeof AppownerRoute
   '/auditor': typeof AuditorRouteWithChildren
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
@@ -112,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
   '/owner/analytics': typeof OwnerAnalyticsRoute
+  '/owner/custom-reports': typeof OwnerCustomReportsRoute
   '/owner/departments': typeof OwnerDepartmentsRoute
   '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
@@ -120,6 +134,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/appowner': typeof AppownerRoute
   '/auditor': typeof AuditorRouteWithChildren
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
@@ -129,6 +144,7 @@ export interface FileRoutesByTo {
   '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
   '/owner/analytics': typeof OwnerAnalyticsRoute
+  '/owner/custom-reports': typeof OwnerCustomReportsRoute
   '/owner/departments': typeof OwnerDepartmentsRoute
   '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
@@ -138,6 +154,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/appowner': typeof AppownerRoute
   '/auditor': typeof AuditorRouteWithChildren
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
@@ -147,6 +164,7 @@ export interface FileRoutesById {
   '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
   '/owner/analytics': typeof OwnerAnalyticsRoute
+  '/owner/custom-reports': typeof OwnerCustomReportsRoute
   '/owner/departments': typeof OwnerDepartmentsRoute
   '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
@@ -157,6 +175,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/appowner'
     | '/auditor'
     | '/gm'
     | '/login'
@@ -166,6 +185,7 @@ export interface FileRouteTypes {
     | '/auditor/tasks'
     | '/auditor/upload'
     | '/owner/analytics'
+    | '/owner/custom-reports'
     | '/owner/departments'
     | '/owner/ledger'
     | '/owner/performance'
@@ -174,6 +194,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/appowner'
     | '/auditor'
     | '/gm'
     | '/login'
@@ -183,6 +204,7 @@ export interface FileRouteTypes {
     | '/auditor/tasks'
     | '/auditor/upload'
     | '/owner/analytics'
+    | '/owner/custom-reports'
     | '/owner/departments'
     | '/owner/ledger'
     | '/owner/performance'
@@ -191,6 +213,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/appowner'
     | '/auditor'
     | '/gm'
     | '/login'
@@ -200,6 +223,7 @@ export interface FileRouteTypes {
     | '/auditor/tasks'
     | '/auditor/upload'
     | '/owner/analytics'
+    | '/owner/custom-reports'
     | '/owner/departments'
     | '/owner/ledger'
     | '/owner/performance'
@@ -209,6 +233,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppownerRoute: typeof AppownerRoute
   AuditorRoute: typeof AuditorRouteWithChildren
   GmRoute: typeof GmRoute
   LoginRoute: typeof LoginRoute
@@ -253,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuditorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/appowner': {
+      id: '/appowner'
+      path: '/appowner'
+      fullPath: '/appowner'
+      preLoaderRoute: typeof AppownerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -293,6 +325,13 @@ declare module '@tanstack/react-router' {
       path: '/departments'
       fullPath: '/owner/departments'
       preLoaderRoute: typeof OwnerDepartmentsRouteImport
+      parentRoute: typeof OwnerRoute
+    }
+    '/owner/custom-reports': {
+      id: '/owner/custom-reports'
+      path: '/custom-reports'
+      fullPath: '/owner/custom-reports'
+      preLoaderRoute: typeof OwnerCustomReportsRouteImport
       parentRoute: typeof OwnerRoute
     }
     '/owner/analytics': {
@@ -343,6 +382,7 @@ const AuditorRouteWithChildren =
 
 interface OwnerRouteChildren {
   OwnerAnalyticsRoute: typeof OwnerAnalyticsRoute
+  OwnerCustomReportsRoute: typeof OwnerCustomReportsRoute
   OwnerDepartmentsRoute: typeof OwnerDepartmentsRoute
   OwnerLedgerRoute: typeof OwnerLedgerRoute
   OwnerPerformanceRoute: typeof OwnerPerformanceRoute
@@ -352,6 +392,7 @@ interface OwnerRouteChildren {
 
 const OwnerRouteChildren: OwnerRouteChildren = {
   OwnerAnalyticsRoute: OwnerAnalyticsRoute,
+  OwnerCustomReportsRoute: OwnerCustomReportsRoute,
   OwnerDepartmentsRoute: OwnerDepartmentsRoute,
   OwnerLedgerRoute: OwnerLedgerRoute,
   OwnerPerformanceRoute: OwnerPerformanceRoute,
@@ -363,6 +404,7 @@ const OwnerRouteWithChildren = OwnerRoute._addFileChildren(OwnerRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppownerRoute: AppownerRoute,
   AuditorRoute: AuditorRouteWithChildren,
   GmRoute: GmRoute,
   LoginRoute: LoginRoute,

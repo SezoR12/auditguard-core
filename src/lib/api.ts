@@ -231,6 +231,25 @@ export const api = {
   // Absolute URL for a signed download path returned by createExport.
   downloadUrl: (path: string) => `${API_URL}${path}`,
 
+  // --- Phase 11: templates + CRaaS ---
+  templateCriteria: () => request<{ modules: CriteriaModule[] }>("/templates/criteria"),
+  listTemplates: () => request<ReportTemplateItem[]>("/templates"),
+  createTemplate: (body: { name: string; description?: string; sectors?: string[]; config: unknown; is_published?: boolean }) =>
+    request<ReportTemplateItem>("/templates", { method: "POST", body: JSON.stringify(body) }),
+  adminReportRequests: () => request<ReportRequestItem[]>("/admin/report-requests"),
+  deployTemplate: (requestId: string, body: { template_id: string; price_iqd?: number; report_name?: string }) =>
+    request<{ deployed: boolean; custom_report_id: string }>(`/admin/report-requests/${requestId}/deploy`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  createReportRequest: (body: { title: string; requirements?: string }) =>
+    request<{ id: string; status: string }>("/owner/report-requests", { method: "POST", body: JSON.stringify(body) }),
+  myReportRequests: () => request<ReportRequestItem[]>("/owner/report-requests"),
+  customReports: () => request<CustomReportItem[]>("/owner/custom-reports"),
+  // generate returns a PDF blob; callers fetch directly for download.
+  generateCustomReportUrl: (id: string) => `${API_URL}/owner/custom-reports/${id}/generate`,
+  templatePreviewUrl: (id: string) => `${API_URL}/templates/${id}/preview`,
+
   ledger: (params: {
     limit?: number;
     offset?: number;
@@ -409,4 +428,34 @@ export interface WhatIfResult {
   monthly_cash_flow_impact: number;
   net_profit_impact: number;
   projection: Array<{ month: number; cumulative_cash_flow: number }>;
+}
+
+// --- Phase 11: template engine + CRaaS types -------------------------------
+export interface CriteriaMetric { key: string; label: string; unit: string; formula?: string }
+export interface CriteriaModule { sector: string; label: string; metrics: CriteriaMetric[] }
+export interface ReportTemplateItem {
+  id: string;
+  name: string;
+  description: string | null;
+  sectors: string[] | null;
+  config: Record<string, unknown>;
+  version: number;
+  is_published: boolean;
+  created_at: string;
+}
+export interface ReportRequestItem {
+  id: string;
+  company_id?: string;
+  title: string;
+  requirements?: string | null;
+  status: string;
+  price_iqd: number | null;
+  template_id?: string | null;
+  created_at: string;
+}
+export interface CustomReportItem {
+  id: string;
+  name: string;
+  template_id: string;
+  deployed_at: string;
 }
