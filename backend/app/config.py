@@ -30,6 +30,18 @@ class Settings(BaseSettings):
     ENCRYPTION_MASTER_KEY: str = "dev-insecure-master-key-change-me"
     MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024
 
+    # CORS — comma-separated exact origins, plus a regex for preview hosts.
+    # Example: CORS_ORIGINS="https://app.example.com,https://staging.example.com"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
+    # Matches Lovable preview/project domains and localhost by default.
+    CORS_ORIGIN_REGEX: str = (
+        r"https://([a-z0-9-]+\.)*(lovable\.app|lovableproject\.com|lovable\.dev)"
+    )
+
+    @property
+    def cors_origins_list(self) -> list[str]:
+        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+
     @property
     def async_database_url(self) -> str:
         user = quote(self.SUPABASE_DB_USER, safe="")

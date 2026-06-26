@@ -9,13 +9,15 @@ from app.api.owner import router as owner_router
 from app.api.ledger import router as ledger_router
 from app.api.admin import router as admin_router
 from app.api.deps import require_role
+from app.config import settings
 from app.models import User
 
 app = FastAPI(title="AuditCore API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=settings.cors_origins_list,
+    allow_origin_regex=settings.CORS_ORIGIN_REGEX or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
