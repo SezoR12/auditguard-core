@@ -21,18 +21,50 @@ All secrets are in `.env` (chmod 600, **never** committed — it's in
 - **Backups:** AES-256-CBC (OpenSSL, PBKDF2) using `ENCRYPTION_MASTER_KEY`.
 - **Decryption** happens only in memory (OCR, image display, exports).
 
-## Row-Level Security (RLS) — Zero-Knowledge for auditors
+## Row-Level Security (RLS)
 
-Analytics, waste map, risk alerts, cross-reference findings, notifications, and
-daily digests are **hidden from the `auditor` role** at the database level.
+RLS is the database-level enforcement of tenant isolation and auditor
+zero-knowledge. There are three layers of policy:
 
-The app calls `SELECT set_user_role('<role>')` on every request (see
-`app/api/deps.py`). Policies use
-`current_setting('app.current_user_role', true) IS DISTINCT FROM 'auditor'`.
+1. **Auditor zero-knowledge** — analytics, waste map, risk alerts,
+   cross-reference findings, notifications, and daily digests are **hidden from
+   the `auditor` role** (`... IS DISTINCT FROM 'auditor'`).
+2. **`users` + `audit_tasks` scoping** (migration `008` / SQL
+   `20260626000004`):
+   - `public.users` — a user can read their **own** profile; owner/gm/manager can
+     read users **in their own company**; only owner/gm/admin/appowner can
+     create/modify, and **only owner/admin/appowner can change a `role`**
+     (enforced by the `trg_users_role_change` trigger, which blocks even
+     self-escalation).
+   - `public.audit_tasks` — **auditors see only their own assigned tasks**;
+     managers are limited to their **company + branch**; owner/gm to their
+     **company**; admin/appowner = all.
+3. **`documents` / `document_certifications` / `audit_ledger`** (migration `009`
+   / SQL `20260626000005`):
+   - `documents` & `document_certifications` — **company isolation** (cert scope
+     derives from the parent document; auditors may only attribute a cert to
+     themselves).
+   - `audit_ledger` — a single **global, append-only** hash-chain.
+     `SELECT`/`INSERT` are open to all authenticated roles (the chain's
+     `get_last_hash` and auditor auto-logging require it), but **`UPDATE` and
+     `DELETE` are denied for everyone** (immutability). UI read access stays
+     owner-gated at the API.
 
-> **Critical:** RLS is bypassed by Postgres **superusers** and roles with
-> **BYPASSRLS** (Supabase's `postgres` role has `BYPASSRLS`). The runtime app
-> must connect as a **non-privileged role** for RLS to actually apply. Verify:
+The app sets a richer per-request context (not just the role) via
+`app/database.py::set_user_context`, called from `app/api/deps.py`:
+`app.current_user_role`, `app.current_user_id`, `app.current_company_id`,
+`app.current_branch_id`, `app.current_auth_user_id`, `app.current_auth_email`.
+Typed SQL accessors (`public.current_app_role()`, `current_app_company_id()`,
+…, `is_platform_role()`) read these GUCs inside the policies. The auth GUCs are
+set **before** the profile lookup so a user's own-row read passes RLS during
+login/linking.
+
+> **🔴 Critical — RLS does nothing unless the app connects as a non-superuser.**
+> Postgres **superusers** and roles with **BYPASSRLS** ignore every policy
+> above, and Supabase's pooler role (`postgres.<ref>`) has **`BYPASSRLS`**. If
+> production connects with that role, *all of the isolation above is silently
+> inert.* You **must** provision a dedicated non-privileged role and point the
+> app at it (see "Provisioning the runtime DB role" below). Verify:
 
 ```bash
 # Confirm the connecting role is NOT bypassing RLS
@@ -66,6 +98,85 @@ async def main():
 asyncio.run(main())
 PY
 ```
+
+## Provisioning the runtime DB role (`appuser`) — REQUIRED for RLS
+
+By default the app's `.env` points `SUPABASE_DB_USER` at the Supabase pooler
+superuser (`postgres.<project-ref>`), which has **BYPASSRLS** — so RLS is
+**bypassed**. To make RLS actually enforce in production, create a dedicated
+non-privileged login role and switch the app to it.
+
+### On Supabase (hosted Postgres)
+
+Run this in the Supabase **SQL Editor** (as the privileged `postgres` user).
+Pick a strong password and store it in your secrets manager:
+
+```sql
+-- 1. Create a non-superuser, non-BYPASSRLS login role.
+CREATE ROLE appuser LOGIN PASSWORD '<STRONG_PASSWORD>'
+  NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+
+-- 2. Grant least-privilege DML on the existing app tables + sequences.
+GRANT USAGE ON SCHEMA public TO appuser;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO appuser;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO appuser;
+
+-- 3. Make future tables/sequences inherit the same grants.
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO appuser;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO appuser;
+```
+
+> Do **not** grant `appuser` membership in `postgres`, and never set
+> `BYPASSRLS`/`SUPERUSER` on it — that would re-disable RLS.
+
+### Point the app at it
+
+In `.env` (or your deployment secrets), change **only** the DB user/password —
+keep the same pooler host/port (6543, transaction mode):
+
+```dotenv
+SUPABASE_DB_USER=appuser            # was postgres.<project-ref>
+SUPABASE_DB_PASSWORD=<STRONG_PASSWORD>
+# SUPABASE_DB_HOST / SUPABASE_DB_PORT / SUPABASE_DB_NAME unchanged
+```
+
+> Supabase's connection pooler accepts custom roles. If your pooler is
+> configured to require the `postgres.<ref>` username form, create the role and
+> connect via the **session** pooler (5432) or direct connection instead, and
+> keep `statement_cache_size=0` for transaction-pooler use (already set in
+> `app/database.py`).
+
+### Migrations / DDL still run as the privileged role
+
+`appuser` is for the **runtime app only**. Run Alembic migrations and the SQL
+mirrors (`db/migrations/*.sql`) as the privileged `postgres` user — they create
+policies, triggers, and the `current_app_*` helper functions. (`FORCE ROW LEVEL
+SECURITY` is set so even the table owner is subject to policies; migrations that
+need to bypass should run as a superuser, which they do.)
+
+### Confirm RLS is live in production
+
+```bash
+docker compose exec backend python - <<'PY'
+import asyncio
+from sqlalchemy import text
+from app.database import engine
+async def main():
+    async with engine.connect() as c:
+        r=await c.execute(text("select current_user,"
+          "(select rolbypassrls from pg_roles where rolname=current_user)"))
+        u,bypass=r.first()
+        print("connected as:", u, "| bypassrls:", bypass,
+              "→ RLS ACTIVE" if not bypass else "→ ⚠ RLS BYPASSED")
+asyncio.run(main())
+PY
+```
+
+`bypassrls` must be **False**. The full RLS behaviour is covered by
+`backend/tests/test_phase14_rls_auth.py` (36 checks), which connects as a
+non-superuser `appuser` so it proves enforcement, not just policy syntax.
 
 ## Tamper-proof audit ledger
 

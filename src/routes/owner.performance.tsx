@@ -1,11 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { RequireRole } from "@/components/RequireRole";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type AuditorPerformanceRow } from "@/lib/api";
 
 export const Route = createFileRoute("/owner/performance")({
   head: () => ({ meta: [{ title: "أداء المدققين — AuditCore" }] }),
-  component: OwnerPerformancePage,
+  component: () => (
+    <RequireRole allow={["owner", "gm", "admin", "appowner"]}>
+      <OwnerPerformancePage />
+    </RequireRole>
+  ),
 });
 
 function effColor(score: number): string {

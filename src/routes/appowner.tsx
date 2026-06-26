@@ -8,10 +8,15 @@ import {
   type ReportTemplateItem,
 } from "@/lib/api";
 import { downloadAuthed } from "@/lib/download";
+import { RequireRole } from "@/components/RequireRole";
 
 export const Route = createFileRoute("/appowner")({
   head: () => ({ meta: [{ title: "بانل مالك التطبيق — AuditCore" }] }),
-  component: AppOwnerPanel,
+  component: () => (
+    <RequireRole allow={["appowner", "admin"]}>
+      <AppOwnerPanel />
+    </RequireRole>
+  ),
 });
 
 type Block =

@@ -1,12 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { RequireRole } from "@/components/RequireRole";
 import { api, type WidgetDef } from "@/lib/api";
 import { formatIQD } from "@/lib/format";
 
 export const Route = createFileRoute("/manager")({
   head: () => ({ meta: [{ title: "لوحة المدير — AuditCore" }] }),
-  component: ManagerDashboard,
+  component: () => (
+    <RequireRole allow={["manager", "admin", "appowner"]}>
+      <ManagerDashboard />
+    </RequireRole>
+  ),
 });
 
 const STORAGE_KEY = "auditcore.manager.widgets";

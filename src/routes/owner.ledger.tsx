@@ -1,11 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { RequireRole } from "@/components/RequireRole";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type LedgerEntry, type LedgerVerifyResult } from "@/lib/api";
 
 export const Route = createFileRoute("/owner/ledger")({
   head: () => ({ meta: [{ title: "سجل التدقيق — AuditCore" }] }),
-  component: LedgerPage,
+  component: () => (
+    <RequireRole allow={["owner", "gm", "admin", "appowner"]}>
+      <LedgerPage />
+    </RequireRole>
+  ),
 });
 
 const TABLE_LABELS: Record<string, string> = {

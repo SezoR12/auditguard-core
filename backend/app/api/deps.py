@@ -6,7 +6,7 @@ from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database import get_session, set_user_role
+from app.database import get_session, set_user_context, set_user_role
 from app.models import User
 from app.security import verify_supabase_jwt
 
@@ -38,6 +38,14 @@ async def get_current_user(
     ):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=UNAUTHORIZED_AR)
 
+    # Bootstrap RLS context with the JWT identity BEFORE the profile lookup, so
+    # the users SELECT policy lets a user read (and self-link) their own row.
+    await set_user_context(
+        session,
+        auth_user_id=str(auth_user_id),
+        auth_email=payload.get("email") or None,
+    )
+
     user = (
         await session.execute(select(User).where(User.auth_user_id == auth_user_id))
     ).scalar_one_or_none()
@@ -56,8 +64,17 @@ async def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail=NO_PROFILE_AR)
 
-    # CRITICAL: drive RLS off the resolved app role, not the Supabase JWT role claim.
-    await set_user_role(session, user.role.value)
+    # CRITICAL: drive RLS off the RESOLVED profile (role + id + company/branch),
+    # not the Supabase JWT claims. This scopes users/audit_tasks row visibility.
+    await set_user_context(
+        session,
+        role=user.role.value,
+        user_id=str(user.id),
+        company_id=str(user.company_id) if user.company_id else None,
+        branch_id=str(user.branch_id) if user.branch_id else None,
+        auth_user_id=str(auth_user_id),
+        auth_email=payload.get("email") or None,
+    )
     return user
 
 

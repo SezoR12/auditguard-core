@@ -1,4 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { RequireRole } from "@/components/RequireRole";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -10,7 +11,11 @@ import {
 
 export const Route = createFileRoute("/auditor/certify")({
   head: () => ({ meta: [{ title: "اعتماد المستندات — AuditCore" }] }),
-  component: CertifyPage,
+  component: () => (
+    <RequireRole allow={["auditor", "admin", "appowner"]}>
+      <CertifyPage />
+    </RequireRole>
+  ),
 });
 
 type FieldKey = keyof ExtractedFields;
