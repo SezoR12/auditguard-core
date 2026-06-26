@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { RequireRole } from "@/components/RequireRole";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
 import { useAuth } from "@/hooks/useAuth";
@@ -6,7 +7,11 @@ import { api, type DocumentItem } from "@/lib/api";
 
 export const Route = createFileRoute("/auditor/upload")({
   head: () => ({ meta: [{ title: "رفع المستندات — AuditCore" }] }),
-  component: UploadPage,
+  component: () => (
+    <RequireRole allow={["auditor", "admin", "appowner"]}>
+      <UploadPage />
+    </RequireRole>
+  ),
 });
 
 // Arabic category labels mapped to backend category keys.

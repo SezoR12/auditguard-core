@@ -1,11 +1,16 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { RequireRole } from "@/components/RequireRole";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { api, type TaskColor, type TaskItem } from "@/lib/api";
 
 export const Route = createFileRoute("/auditor/tasks")({
   head: () => ({ meta: [{ title: "مهامي اليومية — AuditCore" }] }),
-  component: TasksPage,
+  component: () => (
+    <RequireRole allow={["auditor", "admin", "appowner"]}>
+      <TasksPage />
+    </RequireRole>
+  ),
 });
 
 const TYPE_LABELS: Record<string, string> = {

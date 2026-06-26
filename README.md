@@ -56,6 +56,40 @@ SELECT set_user_role('owner');
 SELECT count(*) FROM analytics_outputs;   -- > 0
 ```
 
+## Tenant isolation RLS (users · tasks · documents · ledger)
+
+Beyond the auditor zero-knowledge policies, company/branch isolation is enforced
+at the DB layer (migrations `008`/`009`, SQL mirrors `20260626000004` /
+`20260626000005`):
+
+- **`users`** — read your own profile; owner/gm/manager read users in their own
+  company; only owner/admin/appowner may change a `role` (trigger blocks
+  self-escalation).
+- **`audit_tasks`** — auditors see only their own assigned tasks; managers are
+  scoped to company **+ branch**; owner/gm to company; admin/appowner = all.
+- **`documents` / `document_certifications`** — company isolation; auditors may
+  only attribute a certification to themselves.
+- **`audit_ledger`** — global append-only hash-chain: `SELECT`/`INSERT` open,
+  `UPDATE`/`DELETE` denied for everyone (immutable).
+
+These read a per-request session context set in `app/api/deps.py` via
+`set_user_context` (role, user id, company, branch, auth sub/email) consumed by
+SQL accessors `public.current_app_*()`. Proven live by
+`backend/tests/test_phase14_rls_auth.py` (36 checks, run as non-superuser).
+
+> **RLS only enforces under a non-superuser DB role.** In production you must
+> switch `SUPABASE_DB_USER` from the Supabase pooler superuser (which has
+> `BYPASSRLS`) to a dedicated `appuser`. See **SECURITY.md → "Provisioning the
+> runtime DB role"**.
+
+### Frontend route guards
+
+Protected routes block rendering until `/auth/me` resolves, then redirect:
+unauthenticated → `/login`; authenticated-but-wrong-role → the user's **own**
+role dashboard (`roleHomePath`). Implemented by `src/components/RequireRole.tsx`
+(and the role-aware `RoleDashboard` / `OwnerShell`). This is a UX layer — the
+real enforcement is backend `require_role` + DB RLS.
+
 ## Auth flow
 
 1. Frontend POSTs `{ email, password }` to `/auth/login` → `{ access_token, refresh_token }`.

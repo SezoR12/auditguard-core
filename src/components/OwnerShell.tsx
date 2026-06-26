@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, roleHomePath } from "@/hooks/useAuth";
 import { NotificationBell } from "@/components/NotificationBell";
 
 const OWNER_ROLES = ["owner", "gm", "admin", "appowner"];
@@ -19,27 +19,22 @@ export function OwnerShell({
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
 
+  const allowed = !!user && OWNER_ROLES.includes(user.role);
+
   useEffect(() => {
-    if (!loading && !user) void navigate({ to: "/login" });
-  }, [user, loading, navigate]);
+    if (loading) return; // wait for /auth/me to resolve
+    if (!user) {
+      void navigate({ to: "/login" });
+      return;
+    }
+    // Wrong role → redirect to the user's own dashboard, not a dead end.
+    if (!allowed) void navigate({ to: roleHomePath(user.role) });
+  }, [user, loading, allowed, navigate]);
 
-  if (loading || !user) {
+  if (loading || !user || !allowed) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">جاري تحليل البيانات...</p>
-      </div>
-    );
-  }
-
-  if (!OWNER_ROLES.includes(user.role)) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4" dir="rtl">
-        <div className="max-w-md rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-right">
-          <h2 className="text-lg font-semibold text-destructive">ليس لديك الصلاحية</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            هذه الصفحة مخصصة للمالك والإدارة فقط.
-          </p>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-background" dir="rtl">
+        <p className="text-muted-foreground">جارٍ التحقق من الصلاحيات...</p>
       </div>
     );
   }

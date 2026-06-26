@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, roleHomePath } from "@/hooks/useAuth";
 
 interface Props {
   expectedRole: "owner" | "gm" | "manager" | "auditor";
@@ -9,37 +9,29 @@ interface Props {
   children?: ReactNode;
 }
 
+// Platform roles can view any role dashboard.
+const PLATFORM = ["admin", "appowner"];
+
 export function RoleDashboard({ expectedRole, title, children }: Props) {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
 
+  const allowed = !!user && (user.role === expectedRole || PLATFORM.includes(user.role));
+
   useEffect(() => {
-    if (!loading && !user) void navigate({ to: "/login" });
-  }, [user, loading, navigate]);
+    if (loading) return; // wait for /auth/me to resolve
+    if (!user) {
+      void navigate({ to: "/login" });
+      return;
+    }
+    // Wrong role → send the user to THEIR own dashboard, not a dead end.
+    if (!allowed) void navigate({ to: roleHomePath(user.role) });
+  }, [user, loading, allowed, navigate]);
 
-  if (loading || !user) {
+  if (loading || !user || !allowed) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <p className="text-muted-foreground">جارٍ التحميل...</p>
-      </div>
-    );
-  }
-
-  if (user.role !== expectedRole) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background px-4" dir="rtl">
-        <div className="max-w-md rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-right">
-          <h2 className="text-lg font-semibold text-destructive">ليس لديك الصلاحية</h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            دورك الحالي ({user.role}) لا يسمح بالوصول إلى هذه الصفحة.
-          </p>
-          <button
-            onClick={logout}
-            className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-          >
-            تسجيل الخروج
-          </button>
-        </div>
+      <div className="flex min-h-screen items-center justify-center bg-background" dir="rtl">
+        <p className="text-muted-foreground">جارٍ التحقق من الصلاحيات...</p>
       </div>
     );
   }
