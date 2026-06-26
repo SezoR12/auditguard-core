@@ -25,6 +25,15 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://redis:6379/0"
 
+    # Notifications / WhatsApp (Phase 8)
+    BAILEYS_URL: str = "http://baileys-bridge:3001"
+    WHATSAPP_QUEUE_KEY: str = "whatsapp:queue"
+    # Do-Not-Disturb window (Baghdad local hours, 24h). Default 23:00–06:00.
+    DND_START_HOUR: int = 23
+    DND_END_HOUR: int = 6
+    # Default country dialing code prepended to bare local numbers (Iraq = 964).
+    DEFAULT_COUNTRY_CODE: str = "964"
+
     # File storage / encryption (Phase 2)
     STORAGE_ROOT: str = "/data"
     ENCRYPTION_MASTER_KEY: str = "dev-insecure-master-key-change-me"

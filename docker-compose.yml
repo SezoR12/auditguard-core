@@ -68,7 +68,7 @@ services:
       STORAGE_ROOT: /data
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
     # Celery worker consuming OCR + task + analysis queues (Tesseract/poppler in image).
-    command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q ocr,tasks,analysis
+    command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q ocr,tasks,analysis,notify
     volumes:
       - ./backend:/app
       # Must share the same encrypted storage as the backend.
@@ -132,6 +132,12 @@ services:
       dockerfile: Dockerfile
     container_name: auditcore_baileys
     restart: unless-stopped
+    environment:
+      PORT: "3001"
+      WHATSAPP_AUTH_DIR: /data/whatsapp_auth
+    volumes:
+      # Persist the WhatsApp session across restarts (shared /data volume).
+      - auditcore_data:/data
     expose:
       - "3001"
     networks:

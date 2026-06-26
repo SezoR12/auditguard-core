@@ -534,3 +534,56 @@ both 403'd at the API and would see zero rows at the DB.
   aggregates (5 cards, departments, categories, narratives, cross-ref, decrypted
   Layer-4 image + uploader attribution) and that an auditor JWT is 403 on all
   four endpoints.
+
+---
+
+# AuditCore — Phase 8: Silent Early Warning (Alerts, Digest, WhatsApp)
+
+Real-time alerts for critical anomalies, a 07:00 daily digest, and WhatsApp
+delivery via a Baileys bridge — with an offline Redis queue.
+
+## Backend
+- `services/notify_templates.py` — Arabic templates (critical / digest / overdue),
+  DND window (Baghdad 23:00–06:00, configurable), phone normalization (Iraq 964).
+- `services/whatsapp.py` — POSTs to the Baileys bridge `/send-message`; on any
+  failure pushes to Redis list `whatsapp:queue`; `flush_queue()` retries.
+- `services/alert_service.py` — severity routing: critical → in-app + immediate
+  WhatsApp (unless DND); high → in-app (+ digest); low → in-app only. Recipients
+  = owners + GMs (never auditors). Also `handle_task_overdue`.
+- `services/digest_service.py` — per-owner daily digest (yesterday's waste,
+  completed/overdue tasks, open alerts, latest trust index); idempotent per day.
+- Hooks: orchestrator routes each `risk_alert` through the classifier; the
+  overdue checker notifies owners/GM of late tasks.
+- `workers/notify_worker.py` + beat: `notify.daily_digest` at 04:00 UTC (07:00
+  Baghdad), `notify.flush_whatsapp_queue` every 5 min; worker drains
+  `-Q ocr,tasks,analysis,notify`.
+- `api/notifications.py` — `GET /owner/notifications`,
+  `POST /owner/notifications/{id}/read`, `POST /owner/notifications/read-all`,
+  `GET /owner/daily-digests`. `POST /admin/run-digest` for manual runs.
+- Migration 006 + SQL mirror: `notifications`, `daily_digests`,
+  `users.whatsapp_phone` — notifications & digests are RLS auditor-hidden.
+
+## Baileys bridge (`baileys-bridge/`)
+- `@whiskeysockets/baileys` + express. Multi-file auth in `/data/whatsapp_auth`
+  (persistent volume → session survives restarts). QR shown in logs + `GET /qr`
+  (PNG data URL). `POST /send-message {to,message}`; returns 503 when not yet
+  linked so the backend queues. `GET /status` for health.
+
+## Frontend
+- `components/NotificationBell.tsx` — bell + unread badge in the owner header,
+  dropdown list with severity dots + timestamps, click → drills to the relevant
+  layer, mark-one / mark-all read, polls every minute.
+
+## Acceptance criteria — verified
+- ✅ Critical alert → in-app notification + WhatsApp dispatch (integration test).
+- ✅ Bridge offline → queued in Redis → sent on `flush_queue` when restored
+  (queue drains).
+- ✅ Daily digest with correct aggregates, stored + WhatsApp'd.
+- ✅ Owner sees bell with unread count; auditor gets 403 on all alert endpoints
+  and 0 rows via RLS.
+
+## Tests
+- `tests/test_phase8_notify.py` — 13 logic checks (templates, DND, phone).
+- `tests/test_phase8_notify_db.py` — 20-check DB integration via the real ASGI
+  app + live Redis + a mocked bridge: critical→notify+WA, offline→queue→flush,
+  low→in-app only, digest, notification API, and auditor 403 + RLS.

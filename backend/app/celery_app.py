@@ -23,6 +23,7 @@ celery_app = Celery(
         "app.workers.ocr_worker",
         "app.workers.task_worker",
         "app.workers.analysis_worker",
+        "app.workers.notify_worker",
     ],
 )
 
@@ -46,6 +47,8 @@ celery_app.conf.update(
         "tasks.check_overdue": {"queue": "tasks"},
         "analysis.run_daily": {"queue": "analysis"},
         "analysis.run_for_company": {"queue": "analysis"},
+        "notify.daily_digest": {"queue": "notify"},
+        "notify.flush_whatsapp_queue": {"queue": "notify"},
     },
 )
 
@@ -69,5 +72,16 @@ celery_app.conf.beat_schedule = {
         # 23:00 UTC == 02:00 Asia/Baghdad (next day)
         "schedule": crontab(hour=23, minute=0),
         "options": {"queue": "analysis"},
+    },
+    "daily-digest-07-baghdad": {
+        "task": "notify.daily_digest",
+        # 04:00 UTC == 07:00 Asia/Baghdad
+        "schedule": crontab(hour=4, minute=0),
+        "options": {"queue": "notify"},
+    },
+    "flush-whatsapp-queue-5min": {
+        "task": "notify.flush_whatsapp_queue",
+        "schedule": crontab(minute="*/5"),
+        "options": {"queue": "notify"},
     },
 }

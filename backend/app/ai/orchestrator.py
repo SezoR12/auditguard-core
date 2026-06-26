@@ -113,22 +113,33 @@ async def run_analysis_for_company(company_id: uuid.UUID | str) -> dict:
         flags = dq_mod.run_data_quality(records)
         q_score = dq_mod.quality_score(records, flags)
 
-        # Step 2: anomalies → risk_alerts
+        # Step 2: anomalies → risk_alerts (+ classify/route alerts)
+        from app.services import alert_service
+
         anomalies = anomaly_mod.run_anomaly_detection(records)
         for a in anomalies:
-            session.add(
-                RiskAlert(
-                    company_id=cid,
-                    severity=_sev(a.severity),
-                    title=a.title,
-                    description=a.description,
-                    financial_impact=(
-                        Decimal(str(round(a.financial_impact, 2)))
-                        if a.financial_impact is not None
-                        else None
-                    ),
-                    status="open",
-                )
+            ra = RiskAlert(
+                company_id=cid,
+                severity=_sev(a.severity),
+                title=a.title,
+                description=a.description,
+                financial_impact=(
+                    Decimal(str(round(a.financial_impact, 2)))
+                    if a.financial_impact is not None
+                    else None
+                ),
+                status="open",
+            )
+            session.add(ra)
+            await session.flush()  # get ra.id
+            await alert_service.handle_risk_alert(
+                session,
+                company_id=cid,
+                severity=ra.severity.value if hasattr(ra.severity, "value") else str(ra.severity),
+                department="المشتريات",
+                short_desc=a.title,
+                financial_impact=a.financial_impact,
+                ref_id=ra.id,
             )
 
         # Step 3: cross-reference → cross_reference_findings

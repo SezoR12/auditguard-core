@@ -101,11 +101,29 @@ async def check_overdue(session: AsyncSession) -> dict:
         )
     ).all()
 
+    from app.services import alert_service
+
     total_points = 0
     affected = 0
     for task, auditor in rows:
+        # Hours overdue before we flip status.
+        deadline = task.sla_deadline
+        if deadline is not None and deadline.tzinfo is None:
+            deadline = deadline.replace(tzinfo=timezone.utc)
+        hours_overdue = (now - deadline).total_seconds() / 3600 if deadline else 0.0
+
         total_points += await apply_overdue_demerit(session, task, auditor)
         affected += 1
+
+        # Notify owners/GM that this task is overdue (high severity).
+        await alert_service.handle_task_overdue(
+            session,
+            company_id=auditor.company_id,
+            auditor_name=auditor.full_name,
+            task_title=task.title,
+            hours_overdue=hours_overdue,
+            ref_id=task.id,
+        )
 
     await session.commit()
     return {"overdue_tasks": affected, "demerits_applied": total_points}

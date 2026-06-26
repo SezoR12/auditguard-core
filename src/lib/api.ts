@@ -207,6 +207,14 @@ export const api = {
   },
   dashLayer4: (documentId: string) => request<DashLayer4>(`/owner/dashboard/layer4/${documentId}`),
 
+  notifications: (unreadOnly = false) =>
+    request<NotificationList>(`/owner/notifications${unreadOnly ? "?unread_only=true" : ""}`),
+  markNotificationRead: (id: string) =>
+    request<{ updated: number }>(`/owner/notifications/${id}/read`, { method: "POST" }),
+  markAllNotificationsRead: () =>
+    request<{ updated: number }>(`/owner/notifications/read-all`, { method: "POST" }),
+  dailyDigests: () => request<DailyDigestItem[]>("/owner/daily-digests"),
+
   ledger: (params: {
     limit?: number;
     offset?: number;
@@ -334,4 +342,35 @@ export interface DashLayer4 {
   extracted_data: Record<string, unknown> | null;
   certifications: CertificationBrief[];
   ledger_entries: LedgerEntryBrief[];
+}
+
+// --- Notifications (Phase 8) ------------------------------------------------
+export interface NotificationItem {
+  id: string;
+  severity: "low" | "medium" | "high" | "critical";
+  category: string;
+  title: string;
+  body: string;
+  financial_impact: number | null;
+  link: { layer?: string; document_id?: string } | null;
+  ref_type: string | null;
+  ref_id: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+export interface NotificationList {
+  unread_count: number;
+  items: NotificationItem[];
+}
+export interface DailyDigestItem {
+  id: string;
+  digest_date: string;
+  waste_total_iqd: number;
+  tasks_completed: number;
+  tasks_overdue: number;
+  alerts_open: number;
+  trust_index: number | null;
+  message: string;
+  whatsapp_sent: boolean;
+  created_at: string;
 }

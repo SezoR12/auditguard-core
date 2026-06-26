@@ -52,3 +52,22 @@ async def run_analysis(
         res = run_daily_analysis_task.delay()
         return {"enqueued": True, "task_id": res.id, "scope": "all_companies"}
     return {"enqueued": False, "reason": "celery_unavailable"}
+
+
+@router.post("/run-digest")
+async def run_digest(
+    inline: bool = Query(True),
+    user: User = Depends(require_role("admin", "appowner", "owner")),
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """Manually trigger the daily digest (testing). Inline runs in-process."""
+    if inline:
+        from app.services.digest_service import generate_and_send_digests
+
+        return await generate_and_send_digests(session)
+    from app.workers.notify_worker import daily_digest_task
+
+    if daily_digest_task is not None:
+        res = daily_digest_task.delay()
+        return {"enqueued": True, "task_id": res.id}
+    return {"enqueued": False, "reason": "celery_unavailable"}

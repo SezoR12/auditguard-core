@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const OWNER_ROLES = ["owner", "gm", "admin", "appowner"];
 
@@ -52,6 +53,7 @@ export function OwnerShell({
             {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
           </div>
           <div className="flex items-center gap-2">
+            <NotificationBell />
             <Link to="/owner" className="rounded-md border border-input bg-background px-3 py-1.5 text-sm hover:bg-accent">
               الرئيسية
             </Link>

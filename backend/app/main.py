@@ -8,6 +8,7 @@ from app.api.tasks import router as tasks_router
 from app.api.owner import router as owner_router
 from app.api.owner_dashboard import router as owner_dashboard_router
 from app.api.ledger import router as ledger_router
+from app.api.notifications import router as notifications_router
 from app.api.admin import router as admin_router
 from app.api.deps import require_role
 from app.config import settings
@@ -31,6 +32,7 @@ app.include_router(tasks_router)
 app.include_router(owner_router)
 app.include_router(owner_dashboard_router)
 app.include_router(ledger_router)
+app.include_router(notifications_router)
 app.include_router(admin_router)
 
 

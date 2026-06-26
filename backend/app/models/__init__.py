@@ -14,6 +14,8 @@ from .waste_map_items import WasteMapItem
 from .risk_alerts import RiskAlert
 from .auditor_performance import AuditorPerformance
 from .cross_reference import CrossReferenceFinding
+from .notification import Notification
+from .daily_digest import DailyDigest
 
 __all__ = [
     "UserRole", "CompanyTier", "TaskType", "TaskStatus", "FileType",
@@ -22,5 +24,5 @@ __all__ = [
     "Company", "Branch", "User", "AuditTask", "Document",
     "DocumentCertification", "AuditLedger", "AnalyticsOutput",
     "WasteMapItem", "RiskAlert", "AuditorPerformance",
-    "CrossReferenceFinding",
+    "CrossReferenceFinding", "Notification", "DailyDigest",
 ]
