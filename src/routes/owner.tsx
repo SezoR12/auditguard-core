@@ -14,7 +14,7 @@ const CARD_DRILL: Record<string, string> = {
   monthly_waste: "/owner/departments",
   trust_index: "/owner/analytics",
   critical_alerts: "/owner/analytics",
-  predicted_cash: "/owner/analytics",
+  predicted_cash: "/owner/what-if",
   team_efficiency: "/owner/performance",
 };
 

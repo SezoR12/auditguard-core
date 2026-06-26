@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GmRouteImport } from './routes/gm'
 import { Route as AuditorRouteImport } from './routes/auditor'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OwnerWhatIfRouteImport } from './routes/owner.what-if'
 import { Route as OwnerRawDataRouteImport } from './routes/owner.raw-data'
 import { Route as OwnerPerformanceRouteImport } from './routes/owner.performance'
 import { Route as OwnerLedgerRouteImport } from './routes/owner.ledger'
@@ -53,6 +54,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const OwnerWhatIfRoute = OwnerWhatIfRouteImport.update({
+  id: '/what-if',
+  path: '/what-if',
+  getParentRoute: () => OwnerRoute,
 } as any)
 const OwnerRawDataRoute = OwnerRawDataRouteImport.update({
   id: '/raw-data',
@@ -110,6 +116,7 @@ export interface FileRoutesByFullPath {
   '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
   '/owner/raw-data': typeof OwnerRawDataRoute
+  '/owner/what-if': typeof OwnerWhatIfRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
   '/owner/raw-data': typeof OwnerRawDataRoute
+  '/owner/what-if': typeof OwnerWhatIfRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +151,7 @@ export interface FileRoutesById {
   '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
   '/owner/raw-data': typeof OwnerRawDataRoute
+  '/owner/what-if': typeof OwnerWhatIfRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +170,7 @@ export interface FileRouteTypes {
     | '/owner/ledger'
     | '/owner/performance'
     | '/owner/raw-data'
+    | '/owner/what-if'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +187,7 @@ export interface FileRouteTypes {
     | '/owner/ledger'
     | '/owner/performance'
     | '/owner/raw-data'
+    | '/owner/what-if'
   id:
     | '__root__'
     | '/'
@@ -193,6 +204,7 @@ export interface FileRouteTypes {
     | '/owner/ledger'
     | '/owner/performance'
     | '/owner/raw-data'
+    | '/owner/what-if'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -247,6 +259,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/owner/what-if': {
+      id: '/owner/what-if'
+      path: '/what-if'
+      fullPath: '/owner/what-if'
+      preLoaderRoute: typeof OwnerWhatIfRouteImport
+      parentRoute: typeof OwnerRoute
     }
     '/owner/raw-data': {
       id: '/owner/raw-data'
@@ -328,6 +347,7 @@ interface OwnerRouteChildren {
   OwnerLedgerRoute: typeof OwnerLedgerRoute
   OwnerPerformanceRoute: typeof OwnerPerformanceRoute
   OwnerRawDataRoute: typeof OwnerRawDataRoute
+  OwnerWhatIfRoute: typeof OwnerWhatIfRoute
 }
 
 const OwnerRouteChildren: OwnerRouteChildren = {
@@ -336,6 +356,7 @@ const OwnerRouteChildren: OwnerRouteChildren = {
   OwnerLedgerRoute: OwnerLedgerRoute,
   OwnerPerformanceRoute: OwnerPerformanceRoute,
   OwnerRawDataRoute: OwnerRawDataRoute,
+  OwnerWhatIfRoute: OwnerWhatIfRoute,
 }
 
 const OwnerRouteWithChildren = OwnerRoute._addFileChildren(OwnerRouteChildren)

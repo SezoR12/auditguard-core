@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { OwnerShell } from "@/components/OwnerShell";
+import { ExportButtons } from "@/components/ExportButtons";
 import {
   api,
   type AnomalyFinding,
@@ -81,6 +82,9 @@ function OwnerLayer3() {
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-right text-sm text-destructive">{error}</div>
       ) : (
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <ExportButtons outputType="risk_alerts" />
+          </div>
           {/* Narratives */}
           {data && data.narratives.length > 0 && (
             <section className="rounded-xl border border-blue-500/30 bg-blue-500/5 p-4">

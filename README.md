@@ -587,3 +587,60 @@ delivery via a Baileys bridge — with an offline Redis queue.
 - `tests/test_phase8_notify_db.py` — 20-check DB integration via the real ASGI
   app + live Redis + a mocked bridge: critical→notify+WA, offline→queue→flush,
   low→in-app only, digest, notification API, and auditor 403 + RLS.
+
+---
+
+# AuditCore — Phase 9: Manager Tools, Export Engine, What-If Simulator
+
+## Manager modular dashboard (`/manager`)
+- `api/manager.py` — `GET /manager/widgets` (catalog) + `GET /manager/widget/{key}`
+  for: budget_status, open_tasks, dept_quality_index, team_performance,
+  pending_corrections.
+- **Department boundary enforced in the API**: a manager is locked to their own
+  `branch_id` (auditors in that branch); owners/GM may pass `branch_id` or see
+  company-wide. Verified with a 2-branch company (manager sees branch A's 2
+  tasks, not branch B's 3).
+- Frontend: widget-selection modal, add/remove/reorder, choices persisted in
+  localStorage; RTL, color-coded.
+
+## Export engine (`services/export_service.py`)
+- Excel (openpyxl): `sheet_view.rightToLeft = True`, styled headers, plus a
+  **شهادة عدم التلاعب** (tamper-proof certificate) sheet.
+- PDF (reportlab): embeds the bundled **Amiri** Arabic font; Arabic is reshaped +
+  bidi-reordered; certificate page appended.
+- PNG (matplotlib): 300 DPI bar chart with Amiri font for Arabic labels.
+- Every export embeds the Phase-5 tamper-proof certificate (last ledger hash +
+  HMAC over content).
+- `POST /owner/exports {output_type, format, date_from, date_to}` →
+  `{download_url, filename, expires_at}`. The URL carries a **15-minute signed
+  token** (HMAC, `core_tokens.py`); `GET /owner/exports/download?token=…` streams
+  the file (token authorizes — no extra auth needed).
+- Bundled font: `backend/app/assets/fonts/Amiri-Regular.ttf` (OFL).
+
+## What-If simulator (`/owner/what-if`)
+- `services/whatif.py` (pure): recovered = base × recovery%; monthly cash-flow =
+  recovery/months − monthly cost; net profit = recovered − total cost; 6-month
+  cumulative projection.
+- `POST /owner/what-if` accepts a `waste_item_id` (pulls its amount) or a manual
+  `base_amount_iqd`.
+- Frontend: sliders (recovery %, months) + cost input, live recompute, Recharts
+  line chart, and export buttons.
+
+## Export buttons
+`components/ExportButtons.tsx` ([تصدير Excel] [تصدير PDF] [تصدير صورة]) added to
+the departments (waste_map) and analytics (risk_alerts) layers + what-if.
+
+## Acceptance criteria — verified
+- ✅ Manager add/remove/rearrange widgets (localStorage layout).
+- ✅ Manager sees only their department (2-branch integration test).
+- ✅ Waste Map → Excel opens RTL with Arabic + cert sheet.
+- ✅ Chart → PNG at 300 DPI with Arabic rendered (Amiri).
+- ✅ What-If 6-month cash-flow math correct (e.g. 1.2M @50%/3mo/150k →
+  recovered 600k, monthly CF 150k, net profit 450k).
+
+## Tests
+- `tests/test_phase9_exports.py` — 16 checks: what-if math, signed-token
+  sign/verify/expire, and Excel/PDF/PNG renderers (valid magic bytes, RTL, cert).
+- `tests/test_phase9_exports_db.py` — 17-check DB integration via the ASGI app:
+  manager department scoping, what-if with a real waste item, Excel/PDF/PNG
+  export + signed download, and auditor 403 on manager/export/what-if.

@@ -215,6 +215,22 @@ export const api = {
     request<{ updated: number }>(`/owner/notifications/read-all`, { method: "POST" }),
   dailyDigests: () => request<DailyDigestItem[]>("/owner/daily-digests"),
 
+  managerWidgets: () => request<{ widgets: WidgetDef[] }>("/manager/widgets"),
+  managerWidget: (key: string) =>
+    request<Record<string, unknown>>(`/manager/widget/${key}`),
+  createExport: (body: { output_type: string; format: string; date_from?: string; date_to?: string }) =>
+    request<ExportResult>("/owner/exports", { method: "POST", body: JSON.stringify(body) }),
+  whatIf: (body: {
+    waste_item_id?: string;
+    base_amount_iqd?: number;
+    recovery_pct: number;
+    implementation_months: number;
+    implementation_cost_iqd: number;
+    horizon_months?: number;
+  }) => request<WhatIfResult>("/owner/what-if", { method: "POST", body: JSON.stringify(body) }),
+  // Absolute URL for a signed download path returned by createExport.
+  downloadUrl: (path: string) => `${API_URL}${path}`,
+
   ledger: (params: {
     limit?: number;
     offset?: number;
@@ -373,4 +389,24 @@ export interface DailyDigestItem {
   message: string;
   whatsapp_sent: boolean;
   created_at: string;
+}
+
+// --- Phase 9: manager widgets, exports, what-if ----------------------------
+export interface WidgetDef {
+  key: string;
+  label: string;
+}
+export interface ExportResult {
+  download_url: string;
+  filename: string;
+  expires_at: string;
+}
+export interface WhatIfResult {
+  inputs: Record<string, unknown>;
+  recovered_amount: number;
+  total_implementation_cost: number;
+  monthly_implementation_cost: number;
+  monthly_cash_flow_impact: number;
+  net_profit_impact: number;
+  projection: Array<{ month: number; cumulative_cash_flow: number }>;
 }

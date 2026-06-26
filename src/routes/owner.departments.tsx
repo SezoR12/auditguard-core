@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { OwnerShell } from "@/components/OwnerShell";
+import { ExportButtons } from "@/components/ExportButtons";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { api } from "@/lib/api";
 import { formatIQD } from "@/lib/format";
@@ -40,6 +41,9 @@ function OwnerLayer2() {
         <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-right text-sm text-destructive">{error}</div>
       ) : (
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <ExportButtons outputType="waste_map" />
+          </div>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Bar chart: waste by department */}
             <section className="rounded-xl border border-border bg-card p-4">
