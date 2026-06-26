@@ -11,21 +11,21 @@ class Settings(BaseSettings):
     SUPABASE_DB_USER: str
     SUPABASE_DB_PASSWORD: str
 
-    # Crypto
-    SECRET_KEY: str
-    JWT_SECRET: str
-    JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    # Supabase Auth (project that issues the JWTs the backend trusts)
+    SUPABASE_URL: str = ""
+    SUPABASE_JWT_SECRET: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+    SUPABASE_JWT_ALGORITHM: str = "HS256"
+    SUPABASE_JWT_AUDIENCE: str = "authenticated"
+
+    # Legacy / app crypto (still used for internal signing if needed)
+    SECRET_KEY: str = "dev-insecure-secret-change-me"
 
     REDIS_URL: str = "redis://redis:6379/0"
 
     # File storage / encryption (Phase 2)
-    # Root directory where encrypted uploads are persisted (Docker volume).
     STORAGE_ROOT: str = "/data"
-    # Master key used to derive per-file AES-256-GCM keys. MUST be set in prod.
     ENCRYPTION_MASTER_KEY: str = "dev-insecure-master-key-change-me"
-    # Max upload size in bytes (50 MB).
     MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024
 
     @property
@@ -37,7 +37,6 @@ class Settings(BaseSettings):
 
     @property
     def sync_database_url(self) -> str:
-        # Alembic uses sync driver
         return (
             f"postgresql+psycopg2://{self.SUPABASE_DB_USER}:{self.SUPABASE_DB_PASSWORD}"
             f"@{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"

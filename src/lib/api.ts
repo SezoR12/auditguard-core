@@ -1,33 +1,20 @@
 // Thin fetch wrapper for the FastAPI backend.
+// Auth: bearer token comes from the Supabase session, not a local-only JWT.
+import { supabaseAuditcore } from "@/lib/supabaseClient";
+
 const API_URL =
   (import.meta.env.VITE_AUDITCORE_API_URL as string | undefined) ?? "http://localhost:8000";
 
-const TOKEN_KEY = "auditcore.access_token";
-const REFRESH_KEY = "auditcore.refresh_token";
-
-export const tokens = {
-  get access() {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(TOKEN_KEY);
-  },
-  get refresh() {
-    if (typeof window === "undefined") return null;
-    return window.localStorage.getItem(REFRESH_KEY);
-  },
-  set(access: string, refresh: string) {
-    window.localStorage.setItem(TOKEN_KEY, access);
-    window.localStorage.setItem(REFRESH_KEY, refresh);
-  },
-  clear() {
-    window.localStorage.removeItem(TOKEN_KEY);
-    window.localStorage.removeItem(REFRESH_KEY);
-  },
-};
+async function getAccessToken(): Promise<string | null> {
+  const { data } = await supabaseAuditcore.auth.getSession();
+  return data.session?.access_token ?? null;
+}
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   headers.set("Content-Type", "application/json");
-  if (tokens.access) headers.set("Authorization", `Bearer ${tokens.access}`);
+  const token = await getAccessToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
 
   const res = await fetch(`${API_URL}${path}`, { ...init, headers });
   if (!res.ok) {
@@ -42,12 +29,6 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
-}
-
-export interface TokenPair {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
 }
 
 export interface CurrentUser {
@@ -84,12 +65,13 @@ export interface UploadResult {
 }
 
 /** Multipart upload via XHR so we can report progress. */
-export function uploadDocument(
+export async function uploadDocument(
   file: File,
   docCategory: string,
   branchId: string | null,
   onProgress?: (pct: number) => void,
 ): Promise<UploadResult> {
+  const token = await getAccessToken();
   return new Promise((resolve, reject) => {
     const form = new FormData();
     form.append("file", file);
@@ -98,7 +80,7 @@ export function uploadDocument(
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_URL}/documents/upload`);
-    if (tokens.access) xhr.setRequestHeader("Authorization", `Bearer ${tokens.access}`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) {
@@ -194,11 +176,7 @@ export interface AuditorPerformanceRow {
 }
 
 export const api = {
-  login: (email: string, password: string) =>
-    request<TokenPair>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => request<CurrentUser>("/auth/me"),
-  refresh: (refresh_token: string) =>
-    request<TokenPair>("/auth/refresh", { method: "POST", body: JSON.stringify({ refresh_token }) }),
 
   myUploads: () => request<DocumentItem[]>("/documents/my-uploads"),
   pendingCertification: () => request<DocumentItem[]>("/documents/pending-certification"),

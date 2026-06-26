@@ -1,11 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, tokens, type CurrentUser } from "@/lib/api";
+import { supabaseAuditcore } from "@/lib/supabaseClient";
+import { api, type CurrentUser } from "@/lib/api";
 
 interface AuthContextValue {
   user: CurrentUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<CurrentUser>;
-  logout: () => void;
+  logout: () => Promise<void>;
   refresh: () => Promise<void>;
 }
 
@@ -15,36 +16,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(async () => {
-    if (!tokens.access) {
+  const loadProfile = useCallback(async () => {
+    const { data } = await supabaseAuditcore.auth.getSession();
+    if (!data.session) {
       setUser(null);
-      setLoading(false);
       return;
     }
     try {
       setUser(await api.me());
     } catch {
-      tokens.clear();
+      // Token valid but no profile / inactive — sign out to clear state.
+      await supabaseAuditcore.auth.signOut();
       setUser(null);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      await loadProfile();
+    } finally {
+      setLoading(false);
+    }
+  }, [loadProfile]);
+
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+    const { data: sub } = supabaseAuditcore.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "SIGNED_OUT" || event === "USER_UPDATED") {
+        void loadProfile();
+      }
+    });
+    return () => sub.subscription.unsubscribe();
+  }, [refresh, loadProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const pair = await api.login(email, password);
-    tokens.set(pair.access_token, pair.refresh_token);
+    const { error } = await supabaseAuditcore.auth.signInWithPassword({ email, password });
+    if (error) {
+      // Surface a normalized Arabic message for invalid creds.
+      const msg = /invalid|credentials|password/i.test(error.message)
+        ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+        : error.message;
+      throw new Error(msg);
+    }
     const me = await api.me();
     setUser(me);
     return me;
   }, []);
 
-  const logout = useCallback(() => {
-    tokens.clear();
+  const logout = useCallback(async () => {
+    await supabaseAuditcore.auth.signOut();
     setUser(null);
   }, []);
 
