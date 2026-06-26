@@ -45,6 +45,47 @@ async def healthz() -> dict:
     return {"status": "ok"}
 
 
+@app.get("/health")
+async def health() -> dict:
+    """Deep health check for external monitoring (DB + Redis connectivity)."""
+    from datetime import datetime, timezone
+
+    import redis.asyncio as aioredis
+    from sqlalchemy import text
+
+    from app.config import settings
+    from app.database import engine
+
+    checks: dict[str, str] = {}
+    overall = "ok"
+
+    # Database
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        checks["database"] = f"error: {type(exc).__name__}"
+        overall = "degraded"
+
+    # Redis
+    try:
+        r = aioredis.from_url(settings.REDIS_URL)
+        await r.ping()
+        await r.aclose()
+        checks["redis"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        checks["redis"] = f"error: {type(exc).__name__}"
+        overall = "degraded"
+
+    return {
+        "status": overall,
+        "checks": checks,
+        "app": "AuditCore",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 # Example role-gated endpoints for Phase 1 acceptance tests
 @app.get("/owner/dashboard")
 async def owner_dashboard(user: User = Depends(require_role("owner"))) -> dict:

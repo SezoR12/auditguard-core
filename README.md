@@ -644,3 +644,60 @@ the departments (waste_map) and analytics (risk_alerts) layers + what-if.
 - `tests/test_phase9_exports_db.py` — 17-check DB integration via the ASGI app:
   manager department scoping, what-if with a real waste item, Excel/PDF/PNG
   export + signed download, and auditor 403 on manager/export/what-if.
+
+---
+
+# AuditCore — Phase 10: On-Premise Deployment & Hardening
+
+Production deployment automation, backups, monitoring, and updates for the
+Smart Box. (Built for the current Supabase-backed architecture; the fully
+air-gapped local-Postgres path is documented in DEPLOYMENT.md.)
+
+## Scripts
+- **`install.sh`** — prerequisite checks (Docker, ≥4GB RAM, ≥100GB disk),
+  interactive prompts (company, owner, Supabase details), generates a hardened
+  `.env` (random `ENCRYPTION_MASTER_KEY`/`JWT_SECRET`/`SECRET_KEY`/
+  `REDIS_PASSWORD`/`POSTGRES_PASSWORD`, chmod 600), brings up the stack, runs
+  migrations + RLS, seeds **owner-only** (no demo data), prints login + WhatsApp
+  QR steps. Target < 30 min.
+- **`backup.sh`** — daily (cron 03:00): encrypted `pg_dump` (AES-256), encrypted
+  `uploads` tar, `audit_ledger` CSV (+ copy to USB at `/mnt/backup_usb` if
+  mounted), rotation (7 daily / 4 weekly / 12 monthly), WhatsApp success/fail
+  notification.
+- **`healthcheck.sh`** — every 5 min: containers running, disk >20% free,
+  RAM <90%, `/health` ok, UPS status; sends a **critical WhatsApp alert** to
+  owners (+ `APP_OWNER_PHONE`) on any failure.
+- **`update.sh`** — pre-update backup, image snapshot, rebuild app services,
+  migrate, **health-gated** with automatic rollback to the previous image.
+- **`scripts/seed_production.py`** — one company + one owner, idempotent.
+
+## Backend
+- `GET /health` — deep check (DB + Redis connectivity) for external monitoring;
+  returns `ok` / `degraded` with per-dependency status. (`/healthz` kept as a
+  liveness probe.)
+
+## Hardening (already in place)
+- Backend container runs as **non-root** (`appuser`, uid 10001).
+- Postgres/Redis are **not published** to the host (Docker-internal only).
+- File-at-rest AES-256-GCM; backups AES-256; RLS zero-knowledge for auditors.
+
+## Docs
+- **DEPLOYMENT.md** — technician step-by-step (non-developer), incl. WhatsApp
+  linking, cron setup, and the air-gapped local-Postgres appendix.
+- **TROUBLESHOOTING.md** — failed login, forgot password, disk full, WhatsApp
+  disconnected, OCR, restore-from-backup, failed update.
+- **SECURITY.md** — encryption, **RLS verification commands** (incl. the
+  BYPASSRLS caveat), ledger verification, key-rotation procedure.
+
+## Verified
+- All scripts pass `bash -n`; production seed compiles.
+- `/health` live-tested against real Postgres + Redis: reports `ok` when both up,
+  and correctly flips to `degraded` (`redis: error`, `database: error`) when a
+  dependency is down.
+- All prior backend suites still green.
+
+## Deferred (documented)
+- **Login rate-limiting (5/15-min lockout)** and **15-min inactivity timeout**:
+  with Supabase Auth the browser authenticates against Supabase directly, so
+  these belong in Supabase Auth settings + a frontend idle-logout. Tracked in
+  SECURITY.md.
