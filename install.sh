@@ -109,6 +109,10 @@ SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
 SUPABASE_JWT_ALGORITHM=HS256
 SUPABASE_JWT_AUDIENCE=authenticated
 
+# Deployment (production: refuse to start on a BYPASSRLS DB role)
+ENVIRONMENT=production
+ALLOW_RLS_BYPASS=false
+
 # App secrets (auto-generated)
 SECRET_KEY=$(gen_secret)
 JWT_SECRET=$(gen_secret)

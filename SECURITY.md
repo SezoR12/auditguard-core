@@ -201,6 +201,30 @@ PY
 `backend/tests/test_phase14_rls_auth.py` (36 checks), which connects as a
 non-superuser `appuser` so it proves enforcement, not just policy syntax.
 
+### Automatic startup guard (defense in depth)
+
+You no longer have to remember to run the check above: the backend verifies it
+on boot (`app/database.py::assert_rls_enforceable`, wired into the FastAPI
+lifespan). Behaviour by `ENVIRONMENT`:
+
+| `ENVIRONMENT` | DB role bypasses RLS? | Result |
+|---|---|---|
+| `production` | yes, `ALLOW_RLS_BYPASS=false` (default) | **App refuses to start** (`RLSBypassError`) |
+| `production` | yes, `ALLOW_RLS_BYPASS=true` | Starts, logs `CRITICAL`, `/health` → `degraded` (`checks.rls=bypassed`) |
+| any | no | Starts normally, `/health` `checks.rls=ok` |
+| non-production | yes | Starts, logs `CRITICAL`, `/health` → `degraded` |
+
+- Set `ENVIRONMENT=production` in `.env` for live deployments.
+- `ALLOW_RLS_BYPASS` is an **explicit escape hatch** (default `false`) for the
+  rare case you must run on a BYPASSRLS role temporarily — do not use it in a
+  real production tenant.
+- If the DB is unreachable during the check, startup is **not** blocked (so a
+  transient DB hiccup can't wedge the app); the check re-runs on next boot.
+- `/health` exposes `checks.rls` (`ok` / `bypassed` / `unknown`) for monitoring.
+
+Covered by `backend/tests/test_phase15_rls_startup_guard.py` (7 checks: both
+bypass states × env × escape hatch, plus the DB-unreachable path).
+
 ## Tamper-proof audit ledger
 
 Every critical action is appended to `audit_ledger` as a SHA-256 hash chain

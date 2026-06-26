@@ -23,6 +23,12 @@ class Settings(BaseSettings):
     # password-grant endpoint server-side (so we can rate-limit attempts).
     SUPABASE_ANON_KEY: str = ""
 
+    # Deployment environment: "development" | "staging" | "production".
+    ENVIRONMENT: str = "development"
+    # Escape hatch: allow the app to start even if the DB role can bypass RLS.
+    # Defaults to False so production fails loudly on a BYPASSRLS role.
+    ALLOW_RLS_BYPASS: bool = False
+
     # Legacy / app crypto (still used for internal signing if needed)
     SECRET_KEY: str = "dev-insecure-secret-change-me"
 

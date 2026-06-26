@@ -40,6 +40,9 @@ services:
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
       # Auth for the Baileys bridge (X-Bridge-Token).
       WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN}
+      # Deployment env: in production the app refuses to start on a BYPASSRLS role.
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+      ALLOW_RLS_BYPASS: ${ALLOW_RLS_BYPASS:-false}
     ports:
       - "8000:8000"
     volumes:

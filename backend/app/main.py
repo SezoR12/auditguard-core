@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -17,7 +19,22 @@ from app.api.deps import require_role
 from app.config import settings
 from app.models import User
 
-app = FastAPI(title="AuditCore API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup checks. Refuses to start in production on a BYPASSRLS role;
+    otherwise records whether RLS is enforced so /health can surface it."""
+    from app.database import assert_rls_enforceable
+
+    app.state.rls_enforced = await assert_rls_enforceable()
+    yield
+
+
+app = FastAPI(title="AuditCore API", version="0.1.0", lifespan=lifespan)
+
+# True if the DB connection enforces RLS, False if it bypasses (only reachable
+# in non-production / ALLOW_RLS_BYPASS, since prod refuses to start). None until
+# the lifespan startup check runs.
+app.state.rls_enforced = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -79,6 +96,17 @@ async def health() -> dict:
     except Exception as exc:  # noqa: BLE001
         checks["redis"] = f"error: {type(exc).__name__}"
         overall = "degraded"
+
+    # RLS enforcement (set at startup). False => the DB role bypasses RLS, so
+    # tenant isolation is inert — surface it as degraded for monitoring.
+    rls_enforced = getattr(app.state, "rls_enforced", None)
+    if rls_enforced is False:
+        checks["rls"] = "bypassed"
+        overall = "degraded"
+    elif rls_enforced is True:
+        checks["rls"] = "ok"
+    else:
+        checks["rls"] = "unknown"
 
     return {
         "status": overall,

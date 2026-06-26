@@ -41,6 +41,7 @@ PURE=(
   tests/test_phase9_exports.py
   tests/test_phase11_templates.py
   tests/test_phase12_sector_metrics.py
+  tests/test_phase15_rls_startup_guard.py
 )
 
 DB=(
