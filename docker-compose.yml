@@ -30,10 +30,15 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       SECRET_KEY: ${SECRET_KEY}
       REDIS_URL: redis://redis:6379/0
+      # Phase 2: encrypted file storage
+      STORAGE_ROOT: /data
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      # Persistent encrypted document storage (Smart Box), outside the container.
+      - auditcore_data:/data
     depends_on:
       - redis
     networks:
@@ -70,6 +75,7 @@ services:
 
 volumes:
   redis_data:
+  auditcore_data:
 
 networks:
   auditcore_net:

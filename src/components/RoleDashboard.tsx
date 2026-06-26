@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useAuth } from "@/hooks/useAuth";
 
 interface Props {
   expectedRole: "owner" | "gm" | "manager" | "auditor";
   title: string;
+  /** Optional extra content rendered inside the dashboard main panel. */
+  children?: ReactNode;
 }
 
-export function RoleDashboard({ expectedRole, title }: Props) {
+export function RoleDashboard({ expectedRole, title, children }: Props) {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -61,9 +63,11 @@ export function RoleDashboard({ expectedRole, title }: Props) {
         </header>
 
         <main className="mt-8 rounded-xl border border-border bg-card p-6">
-          <p className="text-sm text-muted-foreground">
-            هذه صفحة تجريبية. المرحلة الأولى تتحقق فقط من توجيه الأدوار.
-          </p>
+          {children ?? (
+            <p className="text-sm text-muted-foreground">
+              هذه صفحة تجريبية. المرحلة الأولى تتحقق فقط من توجيه الأدوار.
+            </p>
+          )}
         </main>
       </div>
     </div>

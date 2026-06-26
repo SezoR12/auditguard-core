@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GmRouteImport } from './routes/gm'
 import { Route as AuditorRouteImport } from './routes/auditor'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuditorUploadRouteImport } from './routes/auditor.upload'
 
 const OwnerRoute = OwnerRouteImport.update({
   id: '/owner',
@@ -46,43 +47,73 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuditorUploadRoute = AuditorUploadRouteImport.update({
+  id: '/upload',
+  path: '/upload',
+  getParentRoute: () => AuditorRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/auditor': typeof AuditorRoute
+  '/auditor': typeof AuditorRouteWithChildren
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
   '/owner': typeof OwnerRoute
+  '/auditor/upload': typeof AuditorUploadRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/auditor': typeof AuditorRoute
+  '/auditor': typeof AuditorRouteWithChildren
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
   '/owner': typeof OwnerRoute
+  '/auditor/upload': typeof AuditorUploadRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/auditor': typeof AuditorRoute
+  '/auditor': typeof AuditorRouteWithChildren
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
   '/owner': typeof OwnerRoute
+  '/auditor/upload': typeof AuditorUploadRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auditor' | '/gm' | '/login' | '/manager' | '/owner'
+  fullPaths:
+    | '/'
+    | '/auditor'
+    | '/gm'
+    | '/login'
+    | '/manager'
+    | '/owner'
+    | '/auditor/upload'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auditor' | '/gm' | '/login' | '/manager' | '/owner'
-  id: '__root__' | '/' | '/auditor' | '/gm' | '/login' | '/manager' | '/owner'
+  to:
+    | '/'
+    | '/auditor'
+    | '/gm'
+    | '/login'
+    | '/manager'
+    | '/owner'
+    | '/auditor/upload'
+  id:
+    | '__root__'
+    | '/'
+    | '/auditor'
+    | '/gm'
+    | '/login'
+    | '/manager'
+    | '/owner'
+    | '/auditor/upload'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AuditorRoute: typeof AuditorRoute
+  AuditorRoute: typeof AuditorRouteWithChildren
   GmRoute: typeof GmRoute
   LoginRoute: typeof LoginRoute
   ManagerRoute: typeof ManagerRoute
@@ -133,12 +164,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auditor/upload': {
+      id: '/auditor/upload'
+      path: '/upload'
+      fullPath: '/auditor/upload'
+      preLoaderRoute: typeof AuditorUploadRouteImport
+      parentRoute: typeof AuditorRoute
+    }
   }
 }
 
+interface AuditorRouteChildren {
+  AuditorUploadRoute: typeof AuditorUploadRoute
+}
+
+const AuditorRouteChildren: AuditorRouteChildren = {
+  AuditorUploadRoute: AuditorUploadRoute,
+}
+
+const AuditorRouteWithChildren =
+  AuditorRoute._addFileChildren(AuditorRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AuditorRoute: AuditorRoute,
+  AuditorRoute: AuditorRouteWithChildren,
   GmRoute: GmRoute,
   LoginRoute: LoginRoute,
   ManagerRoute: ManagerRoute,
@@ -147,3 +196,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

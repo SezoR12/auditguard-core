@@ -20,6 +20,14 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = "redis://redis:6379/0"
 
+    # File storage / encryption (Phase 2)
+    # Root directory where encrypted uploads are persisted (Docker volume).
+    STORAGE_ROOT: str = "/data"
+    # Master key used to derive per-file AES-256-GCM keys. MUST be set in prod.
+    ENCRYPTION_MASTER_KEY: str = "dev-insecure-master-key-change-me"
+    # Max upload size in bytes (50 MB).
+    MAX_UPLOAD_SIZE: int = 50 * 1024 * 1024
+
     @property
     def async_database_url(self) -> str:
         return (
