@@ -1,4 +1,9 @@
-from datetime import datetime, timedelta, timezone
+"""Supabase JWT verification + (legacy) password hashing.
+
+Supabase signs access tokens with HS256 using the project's JWT secret. We
+verify here; we never mint our own tokens — the frontend calls Supabase Auth
+directly and forwards the access_token as a Bearer header to this API.
+"""
 from typing import Any
 from jose import jwt, JWTError
 from passlib.context import CryptContext
@@ -16,30 +21,14 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-def create_access_token(sub: str, role: str, extra: dict[str, Any] | None = None) -> str:
-    now = datetime.now(timezone.utc)
-    payload = {
-        "sub": sub,
-        "role": role,
-        "iat": now,
-        "exp": now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
-        "type": "access",
-    }
-    if extra:
-        payload.update(extra)
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-
-
-def create_refresh_token(sub: str) -> str:
-    now = datetime.now(timezone.utc)
-    payload = {
-        "sub": sub,
-        "iat": now,
-        "exp": now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
-        "type": "refresh",
-    }
-    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
-
-
-def decode_token(token: str) -> dict[str, Any]:
-    return jwt.decode(token, settings.JWT_SECRET, algorithms=[settings.JWT_ALGORITHM])
+def verify_supabase_jwt(token: str) -> dict[str, Any]:
+    """Verify a Supabase-issued access token. Raises JWTError on failure."""
+    if not settings.SUPABASE_JWT_SECRET:
+        raise JWTError("SUPABASE_JWT_SECRET is not configured")
+    return jwt.decode(
+        token,
+        settings.SUPABASE_JWT_SECRET,
+        algorithms=[settings.SUPABASE_JWT_ALGORITHM],
+        audience=settings.SUPABASE_JWT_AUDIENCE,
+        options={"verify_aud": True},
+    )

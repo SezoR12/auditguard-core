@@ -22,14 +22,12 @@ if [ ! -f .env ]; then
 
   # Random secrets
   SECRET_KEY=$(openssl rand -hex 32)
-  JWT_SECRET=$(openssl rand -hex 32)
   ENCRYPTION_MASTER_KEY=$(openssl rand -hex 32)
   sed -i.bak "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET_KEY}|" .env
-  sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" .env
   sed -i.bak "s|^ENCRYPTION_MASTER_KEY=.*|ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}|" .env
   rm -f .env.bak
 
-  red "⚠  Edit .env and set SUPABASE_DB_PASSWORD + VITE_AUDITCORE_SUPABASE_ANON_KEY, then re-run ./setup.sh"
+  red "⚠  Edit .env and set SUPABASE_DB_PASSWORD, SUPABASE_JWT_SECRET, SUPABASE_SERVICE_ROLE_KEY, and VITE_AUDITCORE_SUPABASE_ANON_KEY, then re-run ./setup.sh"
   exit 1
 fi
 
@@ -38,6 +36,14 @@ set -a; source .env; set +a
 
 if [ -z "${SUPABASE_DB_PASSWORD:-}" ] || [ "${SUPABASE_DB_PASSWORD}" = "replace-me-with-the-real-password" ]; then
   red "✗ SUPABASE_DB_PASSWORD is not set in .env"
+  exit 1
+fi
+if [ -z "${SUPABASE_JWT_SECRET:-}" ] || [[ "${SUPABASE_JWT_SECRET}" == replace-* ]]; then
+  red "✗ SUPABASE_JWT_SECRET is not set in .env (Supabase Project Settings → API → JWT Settings)"
+  exit 1
+fi
+if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ] || [[ "${SUPABASE_SERVICE_ROLE_KEY}" == replace-* ]]; then
+  red "✗ SUPABASE_SERVICE_ROLE_KEY is not set in .env (needed by seed script)"
   exit 1
 fi
 
