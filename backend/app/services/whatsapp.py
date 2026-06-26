@@ -20,8 +20,11 @@ def _redis() -> aioredis.Redis:
 
 async def _post_to_bridge(to: str, message: str, timeout: float = 8.0) -> bool:
     url = f"{settings.BAILEYS_URL.rstrip('/')}/send-message"
+    headers = {}
+    if settings.WHATSAPP_BRIDGE_TOKEN:
+        headers["X-Bridge-Token"] = settings.WHATSAPP_BRIDGE_TOKEN
     async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(url, json={"to": to, "message": message})
+        resp = await client.post(url, json={"to": to, "message": message}, headers=headers)
         resp.raise_for_status()
         data = resp.json()
         return bool(data.get("ok", True))

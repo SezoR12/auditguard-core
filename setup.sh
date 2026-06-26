@@ -23,8 +23,15 @@ if [ ! -f .env ]; then
   # Random secrets
   SECRET_KEY=$(openssl rand -hex 32)
   ENCRYPTION_MASTER_KEY=$(openssl rand -hex 32)
+  WHATSAPP_BRIDGE_TOKEN=$(openssl rand -hex 32)
   sed -i.bak "s|^SECRET_KEY=.*|SECRET_KEY=${SECRET_KEY}|" .env
   sed -i.bak "s|^ENCRYPTION_MASTER_KEY=.*|ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY}|" .env
+  # WHATSAPP_BRIDGE_TOKEN may not exist in older .env.example; replace or append.
+  if grep -q "^WHATSAPP_BRIDGE_TOKEN=" .env; then
+    sed -i.bak "s|^WHATSAPP_BRIDGE_TOKEN=.*|WHATSAPP_BRIDGE_TOKEN=${WHATSAPP_BRIDGE_TOKEN}|" .env
+  else
+    printf '\nWHATSAPP_BRIDGE_TOKEN=%s\n' "${WHATSAPP_BRIDGE_TOKEN}" >> .env
+  fi
   rm -f .env.bak
 
   red "⚠  Edit .env and set SUPABASE_DB_PASSWORD, SUPABASE_JWT_SECRET, SUPABASE_SERVICE_ROLE_KEY, and VITE_AUDITCORE_SUPABASE_ANON_KEY, then re-run ./setup.sh"

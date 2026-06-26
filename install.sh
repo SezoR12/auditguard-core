@@ -115,6 +115,8 @@ JWT_SECRET=$(gen_secret)
 ENCRYPTION_MASTER_KEY=$(gen_secret)
 REDIS_PASSWORD=$(gen_secret)
 POSTGRES_PASSWORD=$(gen_secret)
+# Shared secret authenticating the backend → Baileys WhatsApp bridge.
+WHATSAPP_BRIDGE_TOKEN=$(gen_secret)
 
 # Storage / Redis
 STORAGE_ROOT=/data
