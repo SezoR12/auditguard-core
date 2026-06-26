@@ -1,4 +1,9 @@
 import os, sys, os.path; sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import uuid as _uuid_sfx
+_EMAIL_SFX = _uuid_sfx.uuid4().hex[:8]
+def _em(addr):
+    user, _, dom = addr.partition('@')
+    return f'{user}+{_EMAIL_SFX}@{dom}'
 import asyncio, uuid, time
 from jose import jwt
 import httpx
@@ -34,8 +39,8 @@ async def main():
         await set_user_role(s,"admin")
         c=Company(name="ش", sector="t", tier=CompanyTier.advanced); s.add(c); await s.flush()
         b=Branch(company_id=c.id, name="الرئيسي", location="بغداد"); s.add(b); await s.flush()
-        owner=User(email="o@x.com", full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWNER), whatsapp_phone="07701234567")
-        aud=User(email="a@x.com", full_name="مدقق", role=UserRole.auditor, company_id=c.id, branch_id=b.id, is_active=True, auth_user_id=uuid.UUID(AUD))
+        owner=User(email=_em('o@x.com'), full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWNER), whatsapp_phone="07701234567")
+        aud=User(email=_em('a@x.com'), full_name="مدقق", role=UserRole.auditor, company_id=c.id, branch_id=b.id, is_active=True, auth_user_id=uuid.UUID(AUD))
         s.add_all([owner,aud]); await s.commit(); cid=c.id
 
     # 1. Critical alert -> notification + WhatsApp within the call
@@ -89,18 +94,18 @@ async def main():
     # 5. Notification API: owner sees, auditor 403
     transport=ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
-        r=await ac.get("/owner/notifications", headers={"Authorization":f"Bearer {mint(OWNER,'o@x.com')}"})
+        r=await ac.get("/owner/notifications", headers={"Authorization":f"Bearer {mint(OWNER,_em('o@x.com'))}"})
         ck("owner notifications 200", r.status_code==200)
         if r.status_code==200:
             ck("owner has unread", r.json()["unread_count"]>=1)
             items=r.json()["items"]; ck("notifications listed", len(items)>=1)
             nid=items[0]["id"]
-            rr=await ac.post(f"/owner/notifications/{nid}/read", headers={"Authorization":f"Bearer {mint(OWNER,'o@x.com')}"})
+            rr=await ac.post(f"/owner/notifications/{nid}/read", headers={"Authorization":f"Bearer {mint(OWNER,_em('o@x.com'))}"})
             ck("mark read 200", rr.status_code==200)
-        r=await ac.get("/owner/daily-digests", headers={"Authorization":f"Bearer {mint(OWNER,'o@x.com')}"})
+        r=await ac.get("/owner/daily-digests", headers={"Authorization":f"Bearer {mint(OWNER,_em('o@x.com'))}"})
         ck("owner digests 200", r.status_code==200 and len(r.json())>=1)
         # auditor blocked
-        ah={"Authorization":f"Bearer {mint(AUD,'a@x.com')}"}
+        ah={"Authorization":f"Bearer {mint(AUD,_em('a@x.com'))}"}
         ck("auditor notifications 403", (await ac.get("/owner/notifications", headers=ah)).status_code==403)
         ck("auditor digests 403", (await ac.get("/owner/daily-digests", headers=ah)).status_code==403)
     # RLS at DB layer: auditor sees 0 notifications

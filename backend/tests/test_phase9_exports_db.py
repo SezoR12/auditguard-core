@@ -1,4 +1,9 @@
 import os, sys, os.path; sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import uuid as _uuid_sfx
+_EMAIL_SFX = _uuid_sfx.uuid4().hex[:8]
+def _em(addr):
+    user, _, dom = addr.partition('@')
+    return f'{user}+{_EMAIL_SFX}@{dom}'
 import asyncio, uuid, time
 from datetime import datetime, timezone, timedelta
 from jose import jwt
@@ -22,10 +27,10 @@ async def main():
         c=Company(name="ش", sector="t", tier=CompanyTier.advanced); s.add(c); await s.flush()
         bA=Branch(company_id=c.id, name="فرع أ", location="بغداد"); bB=Branch(company_id=c.id, name="فرع ب", location="البصرة")
         s.add_all([bA,bB]); await s.flush()
-        mgr=User(email="m@x.com", full_name="المدير", role=UserRole.manager, company_id=c.id, branch_id=bA.id, is_active=True, auth_user_id=uuid.UUID(MGR))
-        owner=User(email="o@x.com", full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWN))
-        audA=User(email="aa@x.com", full_name="مدقق أ", role=UserRole.auditor, company_id=c.id, branch_id=bA.id, is_active=True)
-        audB=User(email="ab@x.com", full_name="مدقق ب", role=UserRole.auditor, company_id=c.id, branch_id=bB.id, is_active=True)
+        mgr=User(email=_em('m@x.com'), full_name="المدير", role=UserRole.manager, company_id=c.id, branch_id=bA.id, is_active=True, auth_user_id=uuid.UUID(MGR))
+        owner=User(email=_em('o@x.com'), full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWN))
+        audA=User(email=_em('aa@x.com'), full_name="مدقق أ", role=UserRole.auditor, company_id=c.id, branch_id=bA.id, is_active=True)
+        audB=User(email=_em('ab@x.com'), full_name="مدقق ب", role=UserRole.auditor, company_id=c.id, branch_id=bB.id, is_active=True)
         s.add_all([mgr,owner,audA,audB]); await s.flush()
         # 2 open tasks in branch A, 3 in branch B
         now=datetime.now(timezone.utc)
@@ -37,12 +42,12 @@ async def main():
         s.add(WasteMapItem(company_id=c.id, category=WasteCategory.financial, amount_iqd=1500000, department="المشتريات", description="دفع مكرر", status="open"))
         s.add(WasteMapItem(company_id=c.id, category=WasteCategory.operational, amount_iqd=900000, department="المخازن", description="نقص جرد", status="open"))
         await s.commit()
-        cid=c.id; wid=(await s.execute(__import__("sqlalchemy").select(WasteMapItem.id))).scalars().first()
+        cid=c.id; wid=(await s.execute(__import__("sqlalchemy").select(WasteMapItem.id).where(WasteMapItem.company_id==c.id))).scalars().first()
 
     transport=ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
-        mh={"Authorization":f"Bearer {mint(MGR,'m@x.com')}"}
-        oh={"Authorization":f"Bearer {mint(OWN,'o@x.com')}"}
+        mh={"Authorization":f"Bearer {mint(MGR,_em('m@x.com'))}"}
+        oh={"Authorization":f"Bearer {mint(OWN,_em('o@x.com'))}"}
 
         # widget list
         r=await ac.get("/manager/widgets", headers=mh)
@@ -85,7 +90,7 @@ async def main():
         ck("export png 200", rn.status_code==200)
 
         # RLS / RBAC: auditor blocked
-        ah={"Authorization":f"Bearer {mint(AUD2_AUTH,'aa@x.com')}"}
+        ah={"Authorization":f"Bearer {mint(AUD2_AUTH,_em('aa@x.com'))}"}
         ck("auditor manager widget 403", (await ac.get("/manager/widget/open_tasks", headers=ah)).status_code==403)
         ck("auditor exports 403", (await ac.post("/owner/exports", headers=ah, json={"output_type":"waste_map","format":"excel"})).status_code==403)
         ck("auditor what-if 403", (await ac.post("/owner/what-if", headers=ah, json={"base_amount_iqd":1000})).status_code==403)

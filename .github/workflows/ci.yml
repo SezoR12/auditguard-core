@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend tests (pure + DB integration)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: auditcore
+          POSTGRES_PASSWORD: pw
+          POSTGRES_DB: auditcore
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U auditcore"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+
+    env:
+      # Tests connect AS the non-superuser appuser so RLS is enforced.
+      SUPABASE_DB_HOST: 127.0.0.1
+      SUPABASE_DB_PORT: "5432"
+      SUPABASE_DB_NAME: auditcore
+      SUPABASE_DB_USER: appuser
+      SUPABASE_DB_PASSWORD: apppw
+      SUPABASE_URL: https://test.supabase.co
+      SUPABASE_JWT_SECRET: ci-test-secret
+      SUPABASE_JWT_AUDIENCE: authenticated
+      SECRET_KEY: ci-secret
+      ENCRYPTION_MASTER_KEY: ci-master-key
+      REDIS_URL: redis://localhost:6379/0
+      STORAGE_ROOT: /tmp/auditcore_data
+      RUN_DB_TESTS: "1"
+      # Admin connection used only to prepare the schema/roles.
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: auditcore
+      PGPASSWORD: pw
+      PGDATABASE: auditcore
+      APP_DB_PASSWORD: apppw
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install system deps (OCR, libmagic, poppler, postgres client)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            tesseract-ocr tesseract-ocr-ara poppler-utils libmagic1 postgresql-client
+
+      - name: Install Python deps
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare test database (migrations + non-superuser role)
+        working-directory: backend
+        run: bash scripts/ci_setup_testdb.sh
+
+      - name: Run all backend test suites
+        working-directory: backend
+        run: PYTHON=python RUN_DB_TESTS=1 bash run_tests.sh
+
+  frontend:
+    name: Frontend build + type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+      - name: Type-check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build

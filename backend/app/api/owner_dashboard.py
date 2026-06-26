@@ -355,7 +355,7 @@ async def layer4(
             mime = "image/png" if doc.file_type == FileType.image else "application/pdf"
             image_url = f"data:{mime};base64,{base64.b64encode(raw).decode('ascii')}"
             del raw
-        except FileNotFoundError:
+        except Exception:  # noqa: BLE001 - missing/corrupt/undecryptable file must not 500 the dashboard
             image_url = None
 
     # Uploader name.

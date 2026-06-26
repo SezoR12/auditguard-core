@@ -1,4 +1,9 @@
 import os, sys, os.path; sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import uuid as _uuid_sfx
+_EMAIL_SFX = _uuid_sfx.uuid4().hex[:8]
+def _em(addr):
+    user, _, dom = addr.partition('@')
+    return f'{user}+{_EMAIL_SFX}@{dom}'
 import asyncio, uuid, time
 from jose import jwt
 import httpx
@@ -27,13 +32,20 @@ async def main():
         await set_user_role(s,"admin")
         c=Company(name="ش", sector="t", tier=CompanyTier.advanced); s.add(c); await s.flush()
         b=Branch(company_id=c.id, name="الرئيسي", location="بغداد"); s.add(b); await s.flush()
-        owner=User(email="o@x.com", full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWNER))
-        aud=User(email="a@x.com", full_name="مدقق", role=UserRole.auditor, company_id=c.id, branch_id=b.id, is_active=True, auth_user_id=uuid.UUID(AUD))
+        owner=User(email=_em('o@x.com'), full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWNER))
+        aud=User(email=_em('a@x.com'), full_name="مدقق", role=UserRole.auditor, company_id=c.id, branch_id=b.id, is_active=True, auth_user_id=uuid.UUID(AUD))
         s.add_all([owner,aud]); await s.flush()
         docs=[doc(c.id, f"INV-{100+i}", 500000+i*9000, "المورد أ", uploader=aud.id) for i in range(12)]
         docs.append(doc(c.id,"INV-100",500000,"المورد أ", uploader=aud.id))  # duplicate
         docs.append(doc(c.id,"BANK-1",1200000,"البنك",cat=DocCategory.statement,ckey="bank_statement", uploader=aud.id))
         docs.append(doc(c.id,"INVREP-1",0,"المخزن",cat=DocCategory.report,ckey="inventory_report",items=[{"description":"شاشة","value":"99"}], uploader=aud.id))
+        # Give the first doc an explicit id + a REAL encrypted file so Layer-4
+        # image decrypts (id must exist BEFORE deriving the per-file key).
+        from app.storage import save_encrypted
+        docs[0].id = uuid.uuid4()
+        _png=bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154789c6360000002000154a24f3e0000000049454e44ae426082")
+        _rel=await save_encrypted(plaintext=_png, company_id=str(docs[0].company_id), file_uuid=str(docs[0].id), filename="inv.png")
+        docs[0].file_path=_rel
         s.add_all(docs); await s.commit()
         cid=c.id; first_doc=docs[0].id
     # populate dashboard tables
@@ -42,8 +54,8 @@ async def main():
 
     transport=ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
-        oh={"Authorization":f"Bearer {mint(OWNER,'o@x.com')}"}
-        ah={"Authorization":f"Bearer {mint(AUD,'a@x.com')}"}
+        oh={"Authorization":f"Bearer {mint(OWNER,_em('o@x.com'))}"}
+        ah={"Authorization":f"Bearer {mint(AUD,_em('a@x.com'))}"}
         # Layer 1
         r=await ac.get("/owner/dashboard/layer1", headers=oh)
         ck("L1 owner 200", r.status_code==200)

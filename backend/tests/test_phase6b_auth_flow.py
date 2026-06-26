@@ -1,4 +1,9 @@
 import os, sys, os.path; sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import uuid as _uuid_sfx
+_EMAIL_SFX = _uuid_sfx.uuid4().hex[:8]
+def _em(addr):
+    user, _, dom = addr.partition('@')
+    return f'{user}+{_EMAIL_SFX}@{dom}'
 import asyncio, uuid, time
 from datetime import datetime, timezone, timedelta
 from jose import jwt
@@ -26,9 +31,9 @@ async def seed():
         await set_user_role(s,"admin")
         c=Company(name="ش الاختبار", sector="t", tier=CompanyTier.advanced); s.add(c); await s.flush()
         b=Branch(company_id=c.id, name="الرئيسي", location="بغداد"); s.add(b); await s.flush()
-        s.add(User(email="owner@auditcore.local", full_name="المالك", role=UserRole.owner,
+        s.add(User(email=_em("owner@auditcore.local"), full_name="المالك", role=UserRole.owner,
                    company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWNER_AUTH)))
-        s.add(User(email="auditor@auditcore.local", full_name="المدقق", role=UserRole.auditor,
+        s.add(User(email=_em("auditor@auditcore.local"), full_name="المدقق", role=UserRole.auditor,
                    company_id=c.id, branch_id=b.id, is_active=True, auth_user_id=uuid.UUID(AUD_AUTH)))
         await s.commit()
 
@@ -39,7 +44,7 @@ async def main():
         # 1. no token -> 401
         r=await ac.get("/auth/me"); ck("no token -> 401", r.status_code==401)
         # 2. valid owner token -> /auth/me resolves profile
-        tok=mint(OWNER_AUTH,"owner@auditcore.local")
+        tok=mint(OWNER_AUTH,_em("owner@auditcore.local"))
         r=await ac.get("/auth/me", headers={"Authorization":f"Bearer {tok}"})
         ck("owner /auth/me 200", r.status_code==200)
         if r.status_code==200:
@@ -49,7 +54,7 @@ async def main():
         r=await ac.get("/owner/dashboard", headers={"Authorization":f"Bearer {tok}"})
         ck("owner -> /owner/dashboard 200", r.status_code==200)
         # 4. auditor token -> blocked from owner endpoint (403, Arabic)
-        atok=mint(AUD_AUTH,"auditor@auditcore.local")
+        atok=mint(AUD_AUTH,_em("auditor@auditcore.local"))
         r=await ac.get("/owner/dashboard", headers={"Authorization":f"Bearer {atok}"})
         ck("auditor -> /owner/dashboard 403", r.status_code==403)
         if r.status_code==403:
@@ -58,31 +63,31 @@ async def main():
         r=await ac.get("/auditor/dashboard", headers={"Authorization":f"Bearer {atok}"})
         ck("auditor -> /auditor/dashboard 200", r.status_code==200)
         # 6. token signed with WRONG secret -> 401
-        bad=mint(OWNER_AUTH,"owner@auditcore.local", secret="wrong-secret")
+        bad=mint(OWNER_AUTH,_em("owner@auditcore.local"), secret="wrong-secret")
         r=await ac.get("/auth/me", headers={"Authorization":f"Bearer {bad}"})
         ck("wrong-secret token -> 401", r.status_code==401)
         # 7. wrong audience -> 401
-        wa=mint(OWNER_AUTH,"owner@auditcore.local", aud="something-else")
+        wa=mint(OWNER_AUTH,_em("owner@auditcore.local"), aud="something-else")
         r=await ac.get("/auth/me", headers={"Authorization":f"Bearer {wa}"})
         ck("wrong audience -> 401", r.status_code==401)
         # 8. expired token -> 401
-        ex=mint(OWNER_AUTH,"owner@auditcore.local", exp_delta=-10)
+        ex=mint(OWNER_AUTH,_em("owner@auditcore.local"), exp_delta=-10)
         r=await ac.get("/auth/me", headers={"Authorization":f"Bearer {ex}"})
         ck("expired token -> 401", r.status_code==401)
         # 9. email-fallback linking: user with no auth_user_id gets linked by email
         async with AsyncSessionLocal() as s:
             await set_user_role(s,"admin")
             c=(await s.execute(select(Company))).scalars().first()
-            s.add(User(email="mgr@auditcore.local", full_name="المدير", role=UserRole.manager,
+            s.add(User(email=_em("mgr@auditcore.local"), full_name="المدير", role=UserRole.manager,
                        company_id=c.id, is_active=True, auth_user_id=None))
             await s.commit()
         MGR_AUTH=str(uuid.uuid4())
-        mtok=mint(MGR_AUTH,"mgr@auditcore.local")
+        mtok=mint(MGR_AUTH,_em("mgr@auditcore.local"))
         r=await ac.get("/auth/me", headers={"Authorization":f"Bearer {mtok}"})
         ck("email-fallback links profile (200)", r.status_code==200)
         async with AsyncSessionLocal() as s:
             await set_user_role(s,"admin")
-            u=(await s.execute(select(User).where(User.email=="mgr@auditcore.local"))).scalar_one()
+            u=(await s.execute(select(User).where(User.email==_em("mgr@auditcore.local")))).scalar_one()
             ck("auth_user_id backfilled via email", str(u.auth_user_id)==MGR_AUTH)
 
     await engine.dispose()

@@ -1,4 +1,9 @@
 import os, sys, os.path; sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+import uuid as _uuid_sfx
+_EMAIL_SFX = _uuid_sfx.uuid4().hex[:8]
+def _em(addr):
+    user, _, dom = addr.partition('@')
+    return f'{user}+{_EMAIL_SFX}@{dom}'
 import asyncio, uuid, time
 from jose import jwt
 import httpx
@@ -20,9 +25,9 @@ async def main():
         await set_user_role(s,"admin")
         c=Company(name="شركة عقارية", sector="عقارات", tier=CompanyTier.elite); s.add(c); await s.flush()
         b=Branch(company_id=c.id, name="الرئيسي", location="بغداد"); s.add(b); await s.flush()
-        appo=User(email="app@x.com", full_name="مالك التطبيق", role=UserRole.appowner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(APP))
-        own=User(email="o@x.com", full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWN))
-        aud=User(email="a@x.com", full_name="مدقق", role=UserRole.auditor, company_id=c.id, branch_id=b.id, is_active=True, auth_user_id=uuid.UUID(AUD))
+        appo=User(email=_em('app@x.com'), full_name="مالك التطبيق", role=UserRole.appowner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(APP))
+        own=User(email=_em('o@x.com'), full_name="المالك", role=UserRole.owner, company_id=c.id, is_active=True, auth_user_id=uuid.UUID(OWN))
+        aud=User(email=_em('a@x.com'), full_name="مدقق", role=UserRole.auditor, company_id=c.id, branch_id=b.id, is_active=True, auth_user_id=uuid.UUID(AUD))
         s.add_all([appo,own,aud]); await s.flush()
         # live data for the client's report
         s.add(WasteMapItem(company_id=c.id, category=WasteCategory.financial, amount_iqd=1500000, department="المشتريات", description="دفع مكرر", status="open"))
@@ -33,9 +38,9 @@ async def main():
 
     transport=ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://t") as ac:
-        ah={"Authorization":f"Bearer {mint(APP,'app@x.com')}"}
-        oh={"Authorization":f"Bearer {mint(OWN,'o@x.com')}"}
-        adh={"Authorization":f"Bearer {mint(AUD,'a@x.com')}"}
+        ah={"Authorization":f"Bearer {mint(APP,_em('app@x.com'))}"}
+        oh={"Authorization":f"Bearer {mint(OWN,_em('o@x.com'))}"}
+        adh={"Authorization":f"Bearer {mint(AUD,_em('a@x.com'))}"}
 
         # 1. App Owner sees criteria library
         r=await ac.get("/templates/criteria", headers=ah)
