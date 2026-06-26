@@ -195,6 +195,18 @@ export const api = {
     request<TaskCompleteResult>(`/tasks/${taskId}/complete`, { method: "POST" }),
   auditorPerformance: () => request<AuditorPerformanceRow[]>("/owner/auditor-performance"),
 
+  dashLayer1: () => request<DashLayer1>("/owner/dashboard/layer1"),
+  dashLayer2: () => request<DashLayer2>("/owner/dashboard/layer2"),
+  dashLayer3: (params: { department?: string; severity?: string; date_from?: string; date_to?: string } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v) q.set(k, String(v));
+    });
+    const qs = q.toString();
+    return request<DashLayer3>(`/owner/dashboard/layer3${qs ? `?${qs}` : ""}`);
+  },
+  dashLayer4: (documentId: string) => request<DashLayer4>(`/owner/dashboard/layer4/${documentId}`),
+
   ledger: (params: {
     limit?: number;
     offset?: number;
@@ -239,4 +251,87 @@ export interface LedgerVerifyResult {
   total_entries: number;
   broken_links: string[];
   last_verified_at: string;
+}
+
+// --- Owner dashboard types (Phase 7) ---------------------------------------
+export interface MetricCard {
+  key: string;
+  label: string;
+  value: number;
+  unit: "IQD" | "%" | "count" | "";
+  trend: "up" | "down" | "flat";
+  trend_pct: number | null;
+}
+export interface DashLayer1 {
+  generated_at: string;
+  cards: MetricCard[];
+}
+export interface DepartmentRow {
+  department: string;
+  total_waste_iqd: number;
+  risk_count: number;
+}
+export interface CategorySlice {
+  category: string;
+  label: string;
+  amount_iqd: number;
+}
+export interface DashLayer2 {
+  departments: DepartmentRow[];
+  categories: CategorySlice[];
+}
+export interface CrossRefFinding {
+  id: string;
+  finding_type: string;
+  description: string;
+  variance_amount: number | null;
+  variance_pct: number | null;
+  severity: string;
+  status: string;
+  created_at: string;
+}
+export interface AnomalyFinding {
+  id: string;
+  severity: string;
+  title: string;
+  description: string;
+  financial_impact: number | null;
+  status: string;
+  created_at: string;
+}
+export interface DashLayer3 {
+  narratives: Array<{ audience?: string; text?: string; generated_at?: string }>;
+  cross_reference_findings: CrossRefFinding[];
+  anomalies: AnomalyFinding[];
+}
+export interface CertificationBrief {
+  id: string;
+  auditor_id: string;
+  auditor_name: string | null;
+  is_valid: boolean;
+  corrections_made: Record<string, unknown> | null;
+  certified_at: string;
+}
+export interface LedgerEntryBrief {
+  id: string;
+  action: string;
+  reason: string | null;
+  created_by: string | null;
+  created_by_name: string | null;
+  current_hash: string;
+  created_at: string;
+}
+export interface DashLayer4 {
+  document_id: string;
+  original_filename: string;
+  file_type: string;
+  doc_category: string;
+  status: string;
+  confidence_score: number | null;
+  uploaded_by: string | null;
+  uploaded_by_name: string | null;
+  original_image_url: string | null;
+  extracted_data: Record<string, unknown> | null;
+  certifications: CertificationBrief[];
+  ledger_entries: LedgerEntryBrief[];
 }

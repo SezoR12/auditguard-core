@@ -6,6 +6,7 @@ from app.api.documents import router as documents_router
 from app.api.certification import router as certification_router
 from app.api.tasks import router as tasks_router
 from app.api.owner import router as owner_router
+from app.api.owner_dashboard import router as owner_dashboard_router
 from app.api.ledger import router as ledger_router
 from app.api.admin import router as admin_router
 from app.api.deps import require_role
@@ -28,6 +29,7 @@ app.include_router(documents_router)
 app.include_router(certification_router)
 app.include_router(tasks_router)
 app.include_router(owner_router)
+app.include_router(owner_dashboard_router)
 app.include_router(ledger_router)
 app.include_router(admin_router)
 

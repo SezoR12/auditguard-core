@@ -485,3 +485,52 @@ to RLS-protected tables auditors can never read.
   narratives, trust index).
 - Full DB integration (local Postgres, 14 checks) incl. the RLS zero-knowledge
   verification above.
+
+---
+
+# AuditCore — Phase 7: Owner 4-Layer Dashboard
+
+The Owner command center with progressive drill-down: bird's-eye → department →
+AI findings → raw source.
+
+## Backend (`app/api/owner_dashboard.py`, owner/management only)
+- `GET /owner/dashboard/layer1` — 5 executive metrics: monthly waste (IQD, with
+  MoM trend), trust index (latest snapshot), open critical alerts, predicted
+  next-month cash, avg auditor efficiency.
+- `GET /owner/dashboard/layer2` — waste per department + category breakdown
+  (financial/operational/human/opportunity).
+- `GET /owner/dashboard/layer3` — narratives, cross-reference findings, anomalies;
+  filterable by department / severity / date range.
+- `GET /owner/dashboard/layer4/{document_id}` — raw source: decrypted original
+  image (base64), certified extracted data, certification history (auditor +
+  corrections), and the linked hash-chained ledger entries, with user attribution.
+
+All four reuse `require_role("owner","gm","admin","appowner")`; the underlying
+analytics/waste/risk/cross-ref tables are RLS-protected, so an auditor token is
+both 403'd at the API and would see zero rows at the DB.
+
+## Frontend (TanStack Start + Recharts, RTL)
+- `/owner` (Layer 1) — 5 cards with big numbers, trend arrows, [تفاصيل] drill.
+- `/owner/departments` (Layer 2) — bar chart (waste by dept) + pie (categories) +
+  ranked table; click a department → analytics.
+- `/owner/analytics` (Layer 3) — AI narrative summary, cross-reference + anomaly
+  tables, severity filter; click a finding (with a document_id) → raw data.
+- `/owner/raw-data` (Layer 4) — original image, certified fields, certification
+  log, linked ledger — "هذا هو السجل الأصلي".
+- Shared `OwnerShell` (auth + role guard + refresh), `useAutoRefresh` (5-min
+  auto-refresh + manual), Arabic loading state "جاري تحليل البيانات...".
+- Colors: blue=trust, red=waste/risk, green=opportunity.
+
+## Acceptance criteria — verified
+- ✅ Owner login → Layer 1 with 5 key numbers.
+- ✅ Waste card [تفاصيل] → Layer 2 department breakdown.
+- ✅ Department → Layer 3 cross-reference findings (department-scoped).
+- ✅ Finding → Layer 4 original invoice image + certification history.
+- ✅ RLS: auditor token → 403 on every dashboard endpoint (integration-tested).
+
+## Tests
+- `backend/tests/test_phase7_dashboard.py` — DB integration via the real ASGI
+  app: seeds + runs Phase-6 analysis, then asserts all 4 layers return correct
+  aggregates (5 cards, departments, categories, narratives, cross-ref, decrypted
+  Layer-4 image + uploader attribution) and that an auditor JWT is 403 on all
+  four endpoints.
