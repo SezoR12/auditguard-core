@@ -63,12 +63,40 @@ services:
       REDIS_URL: redis://redis:6379/0
       STORAGE_ROOT: /data
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
-    # Celery worker consuming the OCR queue (Tesseract/poppler are in the image).
-    command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q ocr
+    # Celery worker consuming OCR + task queues (Tesseract/poppler are in the image).
+    command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q ocr,tasks
     volumes:
       - ./backend:/app
       # Must share the same encrypted storage as the backend.
       - auditcore_data:/data
+    depends_on:
+      - redis
+    networks:
+      - auditcore_net
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: auditcore_beat
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      SUPABASE_DB_HOST: ${SUPABASE_DB_HOST}
+      SUPABASE_DB_PORT: ${SUPABASE_DB_PORT}
+      SUPABASE_DB_NAME: ${SUPABASE_DB_NAME}
+      SUPABASE_DB_USER: ${SUPABASE_DB_USER}
+      SUPABASE_DB_PASSWORD: ${SUPABASE_DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      SECRET_KEY: ${SECRET_KEY}
+      REDIS_URL: redis://redis:6379/0
+      STORAGE_ROOT: /data
+      ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
+    # Celery Beat scheduler: daily task generation (08:00 Baghdad) + overdue checks.
+    command: celery -A app.celery_app.celery_app beat --loglevel=info
+    volumes:
+      - ./backend:/app
     depends_on:
       - redis
     networks:

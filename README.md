@@ -295,3 +295,67 @@ auditor GET /certification/next → corrects red/yellow → POST .../certify
 - End-to-end OCR was verified against a rendered Arabic invoice image with real
   Tesseract 5 + the `ara` language pack (text + confidence extracted; encrypt →
   store → decrypt → OCR round-trip confirmed; no plaintext written to disk).
+
+---
+
+# AuditCore — Phase 4: Daily Task Engine & Penalty System
+
+Phase 4 adds the productivity engine: tasks auto-generate each morning for every
+auditor, a live countdown drives urgency, missed SLAs auto-apply demerit points,
+and the Owner gets a performance preview.
+
+## What was added
+
+**Backend**
+- `app/services/sla.py` — pure logic: Baghdad timezone (UTC+3), SLA durations
+  (OCR 4h, bank statements 24h, reversals 2h, custom configurable), demerit
+  values (critical 3 / normal 1), `time_color` (green / yellow <50% / red
+  overdue), and the efficiency formula
+  `(on_time / total) * 100 - (demerits * 5)` (clamped 0–100).
+- `app/services/task_generator.py` — builds tasks from real backlog signals:
+  pending OCR certifications, missing previous-month bank statements, reverse
+  entries. Idempotent per Baghdad day.
+- `app/services/performance.py` — demerit application, `auditor_performance`
+  upsert, and `check_overdue()`.
+- `app/api/tasks.py` —
+  - `GET /tasks/my-tasks` (today's tasks + `time_remaining_seconds` + color)
+  - `POST /tasks/{id}/complete` (records `completed_at`, stops SLA timer,
+    updates performance)
+  - `GET /tasks/overdue-check` (internal; penalizes overdue tasks)
+  - `POST /tasks/generate-daily` (internal/admin)
+- `app/api/owner.py` — `GET /owner/auditor-performance` (today's table:
+  completed, delayed, demerits, efficiency).
+- `app/models/auditor_performance.py` + migration `003_tasks_performance`
+  (Alembic) and `db/migrations/20260626000000_tasks_performance.sql` (adds the
+  `is_critical` flag on `audit_tasks` and the `auditor_performance` table).
+
+**Scheduling (Celery Beat)**
+- `app/workers/task_worker.py` — Celery tasks `tasks.generate_daily` and
+  `tasks.check_overdue`.
+- `app/celery_app.py` — beat schedule:
+  - `tasks.generate_daily` at **05:00 UTC == 08:00 Asia/Baghdad** daily
+  - `tasks.check_overdue` every **15 minutes**
+  - new `tasks` queue (worker now consumes `-Q ocr,tasks`).
+- `docker-compose.yml` — new **`beat`** service (`celery ... beat`) and the
+  `worker` now also drains the `tasks` queue.
+
+**Frontend (TanStack Start)**
+- `src/routes/auditor.tasks.tsx` — RTL task table with **live countdown**,
+  color-coded rows (green/yellow/red), an **[إنجاز]** button, and the summary
+  "المهام المنجزة | المتأخرة | النقاط السلبية".
+- `src/routes/owner.performance.tsx` — RTL performance table for the Owner.
+- `src/lib/api.ts` — `myTasks`, `completeTask`, `auditorPerformance` + types.
+
+## Acceptance criteria — status
+- ✅ 08:00 Baghdad → tasks auto-generate (Celery Beat crontab at 05:00 UTC).
+- ✅ Auditor sees tasks with a per-second countdown timer.
+- ✅ Missed SLA → demerit auto-applied within 15 min (`check_overdue` beat).
+- ✅ Owner views the performance table (delays + efficiency).
+- ✅ Completing a task sets status/`completed_at` and stops the timer.
+
+## Local tests
+- `backend/tests/test_phase4_sla.py` — 21 checks on SLA, color, demerits,
+  efficiency. All passing.
+- A full DB integration run (local Postgres) verified: generation →
+  completion → forced overdue → `check_overdue` → `auditor_performance`
+  aggregation (efficiency `1/2*100 - 3*5 = 35.0`) → idempotent re-generation.

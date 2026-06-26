@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import String, DateTime, ForeignKey, Integer, Enum as SAEnum
+from sqlalchemy import String, DateTime, ForeignKey, Integer, Boolean, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
@@ -17,6 +17,7 @@ class AuditTask(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     task_type: Mapped[TaskType] = mapped_column(SAEnum(TaskType, name="task_type"), nullable=False)
     status: Mapped[TaskStatus] = mapped_column(SAEnum(TaskStatus, name="task_status"), default=TaskStatus.pending, nullable=False)
+    is_critical: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     sla_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     demerit_points: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

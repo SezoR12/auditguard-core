@@ -15,7 +15,9 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as GmRouteImport } from './routes/gm'
 import { Route as AuditorRouteImport } from './routes/auditor'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OwnerPerformanceRouteImport } from './routes/owner.performance'
 import { Route as AuditorUploadRouteImport } from './routes/auditor.upload'
+import { Route as AuditorTasksRouteImport } from './routes/auditor.tasks'
 import { Route as AuditorCertifyRouteImport } from './routes/auditor.certify'
 
 const OwnerRoute = OwnerRouteImport.update({
@@ -48,9 +50,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OwnerPerformanceRoute = OwnerPerformanceRouteImport.update({
+  id: '/performance',
+  path: '/performance',
+  getParentRoute: () => OwnerRoute,
+} as any)
 const AuditorUploadRoute = AuditorUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
+  getParentRoute: () => AuditorRoute,
+} as any)
+const AuditorTasksRoute = AuditorTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
   getParentRoute: () => AuditorRoute,
 } as any)
 const AuditorCertifyRoute = AuditorCertifyRouteImport.update({
@@ -65,9 +77,11 @@ export interface FileRoutesByFullPath {
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
-  '/owner': typeof OwnerRoute
+  '/owner': typeof OwnerRouteWithChildren
   '/auditor/certify': typeof AuditorCertifyRoute
+  '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
+  '/owner/performance': typeof OwnerPerformanceRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -75,9 +89,11 @@ export interface FileRoutesByTo {
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
-  '/owner': typeof OwnerRoute
+  '/owner': typeof OwnerRouteWithChildren
   '/auditor/certify': typeof AuditorCertifyRoute
+  '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
+  '/owner/performance': typeof OwnerPerformanceRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,9 +102,11 @@ export interface FileRoutesById {
   '/gm': typeof GmRoute
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
-  '/owner': typeof OwnerRoute
+  '/owner': typeof OwnerRouteWithChildren
   '/auditor/certify': typeof AuditorCertifyRoute
+  '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
+  '/owner/performance': typeof OwnerPerformanceRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -100,7 +118,9 @@ export interface FileRouteTypes {
     | '/manager'
     | '/owner'
     | '/auditor/certify'
+    | '/auditor/tasks'
     | '/auditor/upload'
+    | '/owner/performance'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -110,7 +130,9 @@ export interface FileRouteTypes {
     | '/manager'
     | '/owner'
     | '/auditor/certify'
+    | '/auditor/tasks'
     | '/auditor/upload'
+    | '/owner/performance'
   id:
     | '__root__'
     | '/'
@@ -120,7 +142,9 @@ export interface FileRouteTypes {
     | '/manager'
     | '/owner'
     | '/auditor/certify'
+    | '/auditor/tasks'
     | '/auditor/upload'
+    | '/owner/performance'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -129,7 +153,7 @@ export interface RootRouteChildren {
   GmRoute: typeof GmRoute
   LoginRoute: typeof LoginRoute
   ManagerRoute: typeof ManagerRoute
-  OwnerRoute: typeof OwnerRoute
+  OwnerRoute: typeof OwnerRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -176,11 +200,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/owner/performance': {
+      id: '/owner/performance'
+      path: '/performance'
+      fullPath: '/owner/performance'
+      preLoaderRoute: typeof OwnerPerformanceRouteImport
+      parentRoute: typeof OwnerRoute
+    }
     '/auditor/upload': {
       id: '/auditor/upload'
       path: '/upload'
       fullPath: '/auditor/upload'
       preLoaderRoute: typeof AuditorUploadRouteImport
+      parentRoute: typeof AuditorRoute
+    }
+    '/auditor/tasks': {
+      id: '/auditor/tasks'
+      path: '/tasks'
+      fullPath: '/auditor/tasks'
+      preLoaderRoute: typeof AuditorTasksRouteImport
       parentRoute: typeof AuditorRoute
     }
     '/auditor/certify': {
@@ -195,16 +233,28 @@ declare module '@tanstack/react-router' {
 
 interface AuditorRouteChildren {
   AuditorCertifyRoute: typeof AuditorCertifyRoute
+  AuditorTasksRoute: typeof AuditorTasksRoute
   AuditorUploadRoute: typeof AuditorUploadRoute
 }
 
 const AuditorRouteChildren: AuditorRouteChildren = {
   AuditorCertifyRoute: AuditorCertifyRoute,
+  AuditorTasksRoute: AuditorTasksRoute,
   AuditorUploadRoute: AuditorUploadRoute,
 }
 
 const AuditorRouteWithChildren =
   AuditorRoute._addFileChildren(AuditorRouteChildren)
+
+interface OwnerRouteChildren {
+  OwnerPerformanceRoute: typeof OwnerPerformanceRoute
+}
+
+const OwnerRouteChildren: OwnerRouteChildren = {
+  OwnerPerformanceRoute: OwnerPerformanceRoute,
+}
+
+const OwnerRouteWithChildren = OwnerRoute._addFileChildren(OwnerRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -212,7 +262,7 @@ const rootRouteChildren: RootRouteChildren = {
   GmRoute: GmRoute,
   LoginRoute: LoginRoute,
   ManagerRoute: ManagerRoute,
-  OwnerRoute: OwnerRoute,
+  OwnerRoute: OwnerRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

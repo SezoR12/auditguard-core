@@ -22,6 +22,12 @@ export const Route = createFileRoute("/auditor")({
           >
             اعتماد المستندات
           </Link>
+          <Link
+            to="/auditor/tasks"
+            className="inline-block rounded-md border border-input bg-background px-4 py-2 text-sm font-medium hover:bg-accent"
+          >
+            مهامي اليومية
+          </Link>
         </div>
       </div>
     </RoleDashboard>

@@ -160,6 +160,39 @@ export interface CertifyResult {
   message: string;
 }
 
+export type TaskColor = "green" | "yellow" | "red";
+
+export interface TaskItem {
+  id: string;
+  title: string;
+  task_type: string;
+  status: "pending" | "in_progress" | "completed" | "overdue";
+  is_critical: boolean;
+  sla_deadline: string | null;
+  completed_at: string | null;
+  demerit_points: number;
+  created_at: string;
+  time_remaining_seconds: number | null;
+  time_color: TaskColor;
+}
+
+export interface TaskCompleteResult {
+  task_id: string;
+  status: string;
+  completed_at: string;
+  on_time: boolean;
+  message: string;
+}
+
+export interface AuditorPerformanceRow {
+  auditor_id: string;
+  full_name: string;
+  tasks_completed_today: number;
+  tasks_delayed: number;
+  demerit_points: number;
+  efficiency_score: number;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<TokenPair>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
@@ -178,4 +211,9 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ corrected_fields: correctedFields, is_valid: isValid }),
     }),
+
+  myTasks: () => request<TaskItem[]>("/tasks/my-tasks"),
+  completeTask: (taskId: string) =>
+    request<TaskCompleteResult>(`/tasks/${taskId}/complete`, { method: "POST" }),
+  auditorPerformance: () => request<AuditorPerformanceRow[]>("/owner/auditor-performance"),
 };
