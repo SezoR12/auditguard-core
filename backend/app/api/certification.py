@@ -19,9 +19,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_role
 from app.database import get_session
-from app.ledger import append_entry
 from app.models import Document, DocumentCertification, User
-from app.models.enums import DocStatus, FileType, LedgerAction
+from app.models.enums import DocStatus, FileType
+from app.services.audit_log import (
+    DOCUMENT_FIELDS,
+    correction_reason,
+    log_certification_insert,
+    log_document_update,
+    model_snapshot,
+)
 from app.schemas.certification import (
     CertificationDocOut,
     CertifyRequest,
@@ -117,16 +123,21 @@ async def certify_document(
     if doc.status != DocStatus.ocr_processing:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=MSG_NOT_READY)
 
+    # Snapshot the document BEFORE mutation (for the update ledger entry).
+    doc_old = model_snapshot(doc, DOCUMENT_FIELDS)
+
     # Determine corrections vs. OCR values.
     existing = doc.extracted_data if isinstance(doc.extracted_data, dict) else {}
     ocr_fields = existing.get("fields", {}) if isinstance(existing, dict) else {}
     corrected = body.corrected_fields or {}
 
     corrections_made: dict = {}
+    correction_reasons: list[str] = []
     for key, new_val in corrected.items():
         old_val = ocr_fields.get(key)
         if old_val != new_val:
             corrections_made[key] = {"from": old_val, "to": new_val}
+            correction_reasons.append(correction_reason(key, old_val, new_val))
 
     # Persist the human-verified field values back into extracted_data.
     final_fields = dict(ocr_fields)
@@ -150,22 +161,17 @@ async def certify_document(
     doc.status = DocStatus.certified
     doc.confidence_score = Decimal("100.00")
 
-    # Hash-chained ledger entry.
-    ledger_new_value = {
-        "certification_id": str(cert.id),
-        "document_id": str(doc.id),
-        "auditor_id": str(user.id),
-        "is_valid": body.is_valid,
-        "corrections_made": corrections_made or None,
-    }
-    entry = await append_entry(
-        session,
-        table_name="document_certifications",
-        record_id=cert.id,
-        action=LedgerAction.insert,
-        created_by=user.id,
-        new_value=ledger_new_value,
-        reason="document certification",
+    # --- Auto-ledger (hash-chained) ---
+    # 1. Document update (status -> certified, corrections applied).
+    cert_reason = "اعتماد مستند"
+    if correction_reasons:
+        cert_reason = "اعتماد مستند | " + " ؛ ".join(correction_reasons)
+    await log_document_update(
+        session, doc, old=doc_old, created_by=user.id, reason=cert_reason
+    )
+    # 2. Certification insert (this entry's hash is returned to the client).
+    entry = await log_certification_insert(
+        session, cert, created_by=user.id, reason=cert_reason
     )
 
     await session.commit()

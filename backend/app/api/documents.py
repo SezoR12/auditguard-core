@@ -124,6 +124,13 @@ async def upload_document(
         extracted_data=extracted,
     )
     session.add(doc)
+    await session.flush()
+
+    # Auto-ledger: record the document insert (hash-chained) before commit.
+    from app.services.audit_log import log_document_insert
+
+    await log_document_insert(session, doc, created_by=user.id)
+
     await session.commit()
     await session.refresh(doc)
 

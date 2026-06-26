@@ -359,3 +359,66 @@ and the Owner gets a performance preview.
 - A full DB integration run (local Postgres) verified: generation →
   completion → forced overdue → `check_overdue` → `auditor_performance`
   aggregation (efficiency `1/2*100 - 3*5 = 35.0`) → idempotent re-generation.
+
+---
+
+# AuditCore — Phase 5: Tamper-Proof Audit Trail
+
+Phase 5 hardens the trust layer: every critical action is cryptographically
+chained (SHA-256), and the Owner can prove no one tampered with history.
+
+## What was added
+
+**Backend**
+- `app/services/ledger_service.py` — the canonical ledger service:
+  - `append_ledger_entry(...)` — fetches the last `current_hash` and computes
+    `current_hash = SHA-256(previous_hash + json.dumps({table_name, record_id,
+    action, old_value, new_value, reason, created_by, created_at}, sort_keys=True))`.
+    `created_at` is set in Python (UTC, tz-aware) and stored, so the chain is
+    re-verifiable from the DB alone.
+  - `verify_ledger_integrity()` — re-walks the whole chain, recomputes each
+    hash, checks linkage, returns `{is_valid, total_entries, broken_links,
+    last_verified_at}`.
+  - `build_tamper_proof_certificate(...)` — report_id, generated_at,
+    ledger_hash_at_generation, and an HMAC-SHA256 `digital_signature` over the
+    report content using the company key (for Phase 9 exports).
+- `app/services/audit_log.py` — service-layer auto-logging helpers used by the
+  API endpoints (async-safe; carry the acting user + RLS role). Logs:
+  - `documents` insert (upload) and update (certification),
+  - `document_certifications` insert,
+  - `audit_tasks` status changes (completion + overdue).
+  - Corrections use the Arabic reason
+    `تصحيح OCR: تغيير [field] من [old] إلى [new]`.
+- `app/api/ledger.py` — **Owner-only**, read/verify only (the ledger is
+  append-only; no update/delete endpoint exists anywhere):
+  - `GET /owner/ledger` — paginated + filterable (table, user, date range),
+    each row carries `chain_status` (valid/invalid) computed from genesis.
+  - `GET /owner/ledger/verify` — runs full verification.
+
+> Why service-layer hooks instead of SQLAlchemy `@event.listens_for`: the engine
+> is async (ORM events can't `await` the ledger INSERT) and the acting user /
+> RLS role live in the request context, not the flush. The hooks are invoked
+> from each mutating endpoint so logging is reliable and attributable.
+
+**Frontend (TanStack Start)**
+- `src/routes/owner.ledger.tsx` — RTL ledger viewer: table (التاريخ، المستخدم،
+  الجدول، العملية، السبب، رمز التحقق، الحالة), a **[التحقق من سلامة السلسلة]**
+  button showing green "السجل سليم 100%" or a red broken-link alert, and filters
+  by table / date range.
+- `src/lib/api.ts` — `ledger()`, `verifyLedger()` + types; owner dashboard link.
+
+## Acceptance criteria — verified
+- ✅ Upload → ledger entry with valid hash (first entry chains from genesis).
+- ✅ Certify → ledger entry whose `previous_hash` matches the last entry.
+- ✅ `/owner/ledger/verify` → `is_valid=true`, chain intact.
+- ✅ Manually editing a ledger hash in the DB → verify returns `is_valid=false`
+  with the broken link(s) identified.
+- ✅ Owner views the full chronological chain with user attribution.
+
+## Local tests
+- `backend/tests/test_phase5_ledger.py` — 8 checks: hashing determinism,
+  every-field sensitivity (incl. `created_at`), chaining, and the HMAC
+  certificate.
+- A full DB integration run (local Postgres, 12 checks) proved: upload →
+  certify (doc update + cert insert) → intact verification → **DB tamper →
+  verify detects it** (flags the edited entry and the now-broken next link).

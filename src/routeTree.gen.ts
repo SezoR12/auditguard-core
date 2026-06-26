@@ -16,6 +16,7 @@ import { Route as GmRouteImport } from './routes/gm'
 import { Route as AuditorRouteImport } from './routes/auditor'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OwnerPerformanceRouteImport } from './routes/owner.performance'
+import { Route as OwnerLedgerRouteImport } from './routes/owner.ledger'
 import { Route as AuditorUploadRouteImport } from './routes/auditor.upload'
 import { Route as AuditorTasksRouteImport } from './routes/auditor.tasks'
 import { Route as AuditorCertifyRouteImport } from './routes/auditor.certify'
@@ -55,6 +56,11 @@ const OwnerPerformanceRoute = OwnerPerformanceRouteImport.update({
   path: '/performance',
   getParentRoute: () => OwnerRoute,
 } as any)
+const OwnerLedgerRoute = OwnerLedgerRouteImport.update({
+  id: '/ledger',
+  path: '/ledger',
+  getParentRoute: () => OwnerRoute,
+} as any)
 const AuditorUploadRoute = AuditorUploadRouteImport.update({
   id: '/upload',
   path: '/upload',
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/auditor/certify': typeof AuditorCertifyRoute
   '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
+  '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
 }
 export interface FileRoutesByTo {
@@ -93,6 +100,7 @@ export interface FileRoutesByTo {
   '/auditor/certify': typeof AuditorCertifyRoute
   '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
+  '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
 }
 export interface FileRoutesById {
@@ -106,6 +114,7 @@ export interface FileRoutesById {
   '/auditor/certify': typeof AuditorCertifyRoute
   '/auditor/tasks': typeof AuditorTasksRoute
   '/auditor/upload': typeof AuditorUploadRoute
+  '/owner/ledger': typeof OwnerLedgerRoute
   '/owner/performance': typeof OwnerPerformanceRoute
 }
 export interface FileRouteTypes {
@@ -120,6 +129,7 @@ export interface FileRouteTypes {
     | '/auditor/certify'
     | '/auditor/tasks'
     | '/auditor/upload'
+    | '/owner/ledger'
     | '/owner/performance'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -132,6 +142,7 @@ export interface FileRouteTypes {
     | '/auditor/certify'
     | '/auditor/tasks'
     | '/auditor/upload'
+    | '/owner/ledger'
     | '/owner/performance'
   id:
     | '__root__'
@@ -144,6 +155,7 @@ export interface FileRouteTypes {
     | '/auditor/certify'
     | '/auditor/tasks'
     | '/auditor/upload'
+    | '/owner/ledger'
     | '/owner/performance'
   fileRoutesById: FileRoutesById
 }
@@ -207,6 +219,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OwnerPerformanceRouteImport
       parentRoute: typeof OwnerRoute
     }
+    '/owner/ledger': {
+      id: '/owner/ledger'
+      path: '/ledger'
+      fullPath: '/owner/ledger'
+      preLoaderRoute: typeof OwnerLedgerRouteImport
+      parentRoute: typeof OwnerRoute
+    }
     '/auditor/upload': {
       id: '/auditor/upload'
       path: '/upload'
@@ -247,10 +266,12 @@ const AuditorRouteWithChildren =
   AuditorRoute._addFileChildren(AuditorRouteChildren)
 
 interface OwnerRouteChildren {
+  OwnerLedgerRoute: typeof OwnerLedgerRoute
   OwnerPerformanceRoute: typeof OwnerPerformanceRoute
 }
 
 const OwnerRouteChildren: OwnerRouteChildren = {
+  OwnerLedgerRoute: OwnerLedgerRoute,
   OwnerPerformanceRoute: OwnerPerformanceRoute,
 }
 

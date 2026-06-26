@@ -95,10 +95,17 @@ async def complete_task(
         deadline = deadline.replace(tzinfo=timezone.utc)
     on_time = deadline is None or now_utc <= deadline
 
+    old_status = task.status.value if hasattr(task.status, "value") else str(task.status)
     task.status = TaskStatus.completed
     task.completed_at = now_utc
 
     await performance.record_task_completed(session, user, task, on_time=on_time)
+
+    # Auto-ledger: task status change (hash-chained).
+    from app.services.audit_log import log_task_status_change
+
+    await log_task_status_change(session, task, old_status=old_status, created_by=user.id)
+
     await session.commit()
 
     return TaskCompleteResponse(

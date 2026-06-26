@@ -66,8 +66,14 @@ async def apply_overdue_demerit(
 ) -> int:
     """Apply demerit for one overdue task. Returns points applied."""
     points = sla.demerit_for(task.is_critical)
+    old_status = task.status.value if hasattr(task.status, "value") else str(task.status)
     task.demerit_points += points
     task.status = TaskStatus.overdue
+
+    # Auto-ledger: status change to overdue (system-applied; created_by=auditor).
+    from app.services.audit_log import log_task_status_change
+
+    await log_task_status_change(session, task, old_status=old_status, created_by=auditor.id)
 
     perf = await _get_or_create_perf(session, auditor, sla.now_baghdad().date())
     perf.demerit_points += points

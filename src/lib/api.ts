@@ -216,4 +216,49 @@ export const api = {
   completeTask: (taskId: string) =>
     request<TaskCompleteResult>(`/tasks/${taskId}/complete`, { method: "POST" }),
   auditorPerformance: () => request<AuditorPerformanceRow[]>("/owner/auditor-performance"),
+
+  ledger: (params: {
+    limit?: number;
+    offset?: number;
+    table_name?: string;
+    user_id?: string;
+    date_from?: string;
+    date_to?: string;
+  } = {}) => {
+    const q = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+    });
+    const qs = q.toString();
+    return request<LedgerPage>(`/owner/ledger${qs ? `?${qs}` : ""}`);
+  },
+  verifyLedger: () => request<LedgerVerifyResult>("/owner/ledger/verify"),
 };
+
+export interface LedgerEntry {
+  id: string;
+  created_at: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  table_name: string;
+  record_id: string;
+  action: string;
+  reason: string | null;
+  previous_hash: string | null;
+  current_hash: string;
+  chain_status: "valid" | "invalid";
+}
+
+export interface LedgerPage {
+  total: number;
+  limit: number;
+  offset: number;
+  entries: LedgerEntry[];
+}
+
+export interface LedgerVerifyResult {
+  is_valid: boolean;
+  total_entries: number;
+  broken_links: string[];
+  last_verified_at: string;
+}
