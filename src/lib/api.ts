@@ -190,6 +190,8 @@ export const api = {
       body: JSON.stringify({ email, password }),
     }),
   me: () => request<CurrentUser>("/auth/me"),
+  // Server-side hard revocation of the current token (best-effort).
+  logout: () => request<{ revoked: boolean }>("/auth/logout", { method: "POST" }),
 
   myUploads: () => request<DocumentItem[]>("/documents/my-uploads"),
   pendingCertification: () => request<DocumentItem[]>("/documents/pending-certification"),

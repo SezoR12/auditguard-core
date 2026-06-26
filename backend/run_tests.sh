@@ -51,6 +51,7 @@ DB=(
   tests/test_phase11_templates_db.py
   tests/test_phase12_sector_metrics_db.py
   tests/test_phase13_auth_hardening.py
+  tests/test_phase13_token_denylist_db.py
 )
 
 run() {

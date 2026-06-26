@@ -837,3 +837,38 @@ user out. Configurable via `SESSION_IDLE_TIMEOUT_MINUTES` (mirrored client-side)
 > Note: this throttles the backend proxy. Supabase's own public auth endpoint
 > can still be called directly; for defense-in-depth also enable Supabase's
 > built-in auth rate limits in the project dashboard.
+
+---
+
+# AuditCore — Branch Protection + Token Denylist
+
+## Branch protection (CI required on PRs)
+`main` is protected (applied via the GitHub API; re-apply with
+`scripts/setup_branch_protection.sh`, needs an admin token):
+- Required status checks (must pass before merge): **Backend tests (pure + DB
+  integration)** and **Frontend build + type-check**.
+- `strict` (branch must be up to date), PRs required, force-pushes & deletions
+  blocked. `enforce_admins=false` so the Lovable sync / admins aren't broken;
+  flip it on for full strictness.
+
+To require it for everyone (incl. admins): re-run with `enforce_admins=true`,
+or toggle in GitHub → Settings → Branches → Branch protection rules.
+
+## Server-side token denylist (hard revocation)
+Beyond the client idle-logout, tokens can be hard-revoked server-side
+(`app/services/token_denylist.py`, Redis), checked in `get_current_user`:
+- `POST /auth/logout` — denies the presented access token until its own `exp`
+  (the SPA logout now calls this before clearing the session).
+- `POST /auth/revoke-user/{auth_user_id}` (owner/admin) — revokes ALL of a
+  user's sessions by setting a "revoke before" cutoff; any token with
+  `iat <= cutoff` is rejected. Use after password reset / suspected compromise.
+- Fails **open** if Redis is unavailable (availability over revocation) — change
+  in `is_denied` if you need fail-closed.
+
+Verified: `tests/test_phase13_token_denylist_db.py` — 6 checks (token revoke →
+401, fresh token still valid, user-wide revoke kills existing sessions, tokens
+issued after the cutoff accepted). Full runner: 17 suites / 256 checks pass.
+
+> For defense-in-depth, also enable Supabase's built-in auth rate limits in the
+> project dashboard (Authentication → Rate Limits) — those guard Supabase's own
+> public auth endpoint, which the backend proxy cannot.

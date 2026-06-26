@@ -30,6 +30,14 @@ async def get_current_user(
     except (JWTError, KeyError, ValueError):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=UNAUTHORIZED_AR)
 
+    # Hard revocation: reject denied / revoked tokens (server-side denylist).
+    from app.services import token_denylist
+
+    if await token_denylist.is_denied(
+        token, sub=payload.get("sub"), iat=payload.get("iat")
+    ):
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=UNAUTHORIZED_AR)
+
     user = (
         await session.execute(select(User).where(User.auth_user_id == auth_user_id))
     ).scalar_one_or_none()

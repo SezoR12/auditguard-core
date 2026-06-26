@@ -80,6 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Hard-revoke the token server-side (best-effort), then clear the session.
+    try {
+      await api.logout();
+    } catch {
+      /* ignore — proceed to local sign-out regardless */
+    }
     await supabaseAuditcore.auth.signOut();
     setUser(null);
   }, []);

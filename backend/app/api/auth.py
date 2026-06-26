@@ -16,7 +16,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_role
 from app.config import settings
 from app.models import User
 from app.schemas.auth import UserOut
@@ -113,3 +113,36 @@ async def login(body: LoginRequest, request: Request) -> LoginResponse:
 @router.get("/me", response_model=UserOut)
 async def me(user: User = Depends(get_current_user)) -> UserOut:
     return UserOut.model_validate(user)
+
+
+@router.post("/logout")
+async def logout(request: Request) -> dict:
+    """Hard-revoke the presented access token (server-side denylist).
+
+    Idempotent: a missing/invalid token is treated as already-logged-out.
+    """
+    from app.security import JWTError, verify_supabase_jwt
+    from app.services import token_denylist
+
+    auth = request.headers.get("authorization", "")
+    token = auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    if not token:
+        return {"revoked": False, "reason": "no_token"}
+    try:
+        payload = verify_supabase_jwt(token)
+    except JWTError:
+        return {"revoked": False, "reason": "invalid_token"}
+    await token_denylist.deny_token(token, payload.get("exp"))
+    return {"revoked": True}
+
+
+@router.post("/revoke-user/{auth_user_id}")
+async def revoke_user(
+    auth_user_id: str,
+    admin: User = Depends(require_role("owner", "gm", "admin", "appowner")),
+) -> dict:
+    """Revoke ALL active sessions for a Supabase user (owner/admin only)."""
+    from app.services import token_denylist
+
+    await token_denylist.revoke_user(auth_user_id)
+    return {"revoked_all": True, "auth_user_id": auth_user_id}
