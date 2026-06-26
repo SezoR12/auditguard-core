@@ -106,13 +106,18 @@ PY
 - Open **http://<server-ip>:5173/login** and log in as the Owner.
 - Check health: **http://<server-ip>:8000/health** → should say `"status":"ok"`.
 
-> **🔴 Before going live — turn RLS on for real.** By default the app connects to
-> Postgres as a role that **bypasses** Row-Level Security, which means tenant
+> **🔴 Before going live — turn RLS on for real.** By default Postgres may be
+> reached with a role that **bypasses** Row-Level Security, which means tenant
 > isolation and auditor zero-knowledge are **not enforced**. You must provision a
 > dedicated non-privileged DB role (`appuser`) and switch `SUPABASE_DB_USER`
-> to it. Step-by-step instructions and a one-line verification command are in
-> **SECURITY.md → "Provisioning the runtime DB role (`appuser`)"**. Confirm the
-> check prints `bypassrls: False → RLS ACTIVE`.
+> to it. Step-by-step instructions are in
+> **SECURITY.md → "Provisioning the runtime DB role (`appuser`)"**.
+>
+> With `ENVIRONMENT=production` (set automatically by `install.sh`), the backend
+> **refuses to start** if the DB role can bypass RLS — so a misconfiguration
+> fails loudly instead of silently shipping with isolation disabled. `/health`
+> also reports `checks.rls` (`ok` / `bypassed`). If you ever need to start on a
+> BYPASSRLS role deliberately, set `ALLOW_RLS_BYPASS=true` (not recommended).
 
 ---
 

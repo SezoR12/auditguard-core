@@ -26,6 +26,63 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+async def connection_bypasses_rls() -> bool:
+    """True if the role the app connects as can bypass Row-Level Security.
+
+    Superusers and roles with rolbypassrls ignore every RLS policy, which would
+    silently disable tenant isolation / auditor zero-knowledge. We check both.
+    """
+    async with engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text(
+                    "SELECT rolsuper OR rolbypassrls "
+                    "FROM pg_roles WHERE rolname = current_user"
+                )
+            )
+        ).scalar_one_or_none()
+    return bool(row)
+
+
+class RLSBypassError(RuntimeError):
+    """Raised at startup when a production app connects with a BYPASSRLS role."""
+
+
+async def assert_rls_enforceable() -> bool:
+    """Verify the DB connection actually enforces RLS.
+
+    Returns True if RLS is enforceable. If the role bypasses RLS:
+      - in production (ENVIRONMENT=production) without ALLOW_RLS_BYPASS → raise
+        RLSBypassError (refuse to start);
+      - otherwise → log CRITICAL and return False (caller may degrade /health).
+    """
+    import logging
+
+    log = logging.getLogger("auditcore.security")
+    try:
+        bypass = await connection_bypasses_rls()
+    except Exception as exc:  # noqa: BLE001 - DB unreachable at startup
+        log.warning("Could not verify RLS enforcement (DB unreachable): %s", exc)
+        return True  # don't block startup purely on a transient DB hiccup
+
+    if not bypass:
+        return True
+
+    is_prod = settings.ENVIRONMENT.lower() == "production"
+    msg = (
+        "DB connection role can BYPASS Row-Level Security "
+        "(superuser or rolbypassrls=true). Tenant isolation and auditor "
+        "zero-knowledge are NOT enforced. Switch SUPABASE_DB_USER to a "
+        "non-privileged role (see SECURITY.md → Provisioning the runtime DB role)."
+    )
+    if is_prod and not settings.ALLOW_RLS_BYPASS:
+        log.critical(msg)
+        raise RLSBypassError(msg)
+    log.critical("%s (continuing: ENVIRONMENT=%s, ALLOW_RLS_BYPASS=%s)",
+                 msg, settings.ENVIRONMENT, settings.ALLOW_RLS_BYPASS)
+    return False
+
+
 async def set_user_role(session: AsyncSession, role: str) -> None:
     """Set the RLS app.current_user_role for the current connection.
 
