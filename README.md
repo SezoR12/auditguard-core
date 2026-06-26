@@ -842,6 +842,14 @@ user out. Configurable via `SESSION_IDLE_TIMEOUT_MINUTES` (mirrored client-side)
 
 # AuditCore — Branch Protection + Token Denylist
 
+## Contributing / PR workflow
+AuditCore uses a **pull-request workflow** — see
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Create a `feat/…`/`fix/…`/`docs/…` branch,
+test it for real, open a PR against `main`, and let CI's two required checks gate
+the merge. A PR template (`.github/pull_request_template.md`) prompts for
+testing/migration/secret-hygiene confirmation. Direct pushes to `main` are
+discouraged (and flagged as a rule bypass for admins).
+
 ## Branch protection (CI required on PRs)
 `main` is protected (applied via the GitHub API; re-apply with
 `scripts/setup_branch_protection.sh`, needs an admin token):
