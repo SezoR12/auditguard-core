@@ -20,7 +20,6 @@ from decimal import Decimal
 
 from sqlalchemy import select
 
-from app.config import settings
 from app.database import AsyncSessionLocal, set_user_role
 from app.models import Document
 from app.models.enums import DocStatus, FileType
@@ -98,16 +97,37 @@ def process_document_sync(doc_id: uuid.UUID | str) -> dict:
     return asyncio.run(process_document(doc_id))
 
 
-# --- Optional Celery task (only active if a broker/app is configured) --------
-try:  # pragma: no cover - depends on broker availability
-    from celery import Celery
+# --- Celery task registration -----------------------------------------------
+# Importing the central app here registers this task at worker startup
+# (app.celery_app includes this module). Guarded so that importing the worker
+# module in environments without celery installed (e.g. unit tests) still works.
+try:  # pragma: no cover - depends on celery availability
+    from app.celery_app import celery_app
 
-    celery_app = Celery("auditcore", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
-
-    @celery_app.task(name="ocr.run_ocr_for_document")
-    def run_ocr_for_document(doc_id: str) -> dict:
-        return process_document_sync(doc_id)
+    @celery_app.task(name="ocr.run_ocr_for_document", bind=True, max_retries=3)
+    def run_ocr_for_document(self, doc_id: str) -> dict:  # noqa: ANN001
+        try:
+            return process_document_sync(doc_id)
+        except Exception as exc:  # noqa: BLE001
+            # Retry with exponential backoff on transient failures.
+            raise self.retry(exc=exc, countdown=min(60, 2 ** self.request.retries))
 
 except Exception:  # noqa: BLE001
     celery_app = None  # type: ignore
     run_ocr_for_document = None  # type: ignore
+
+
+def enqueue_ocr(doc_id: uuid.UUID | str) -> str | None:
+    """Enqueue OCR via Celery. Returns the task id, or None if unavailable.
+
+    Used by the upload endpoint. If Celery/broker is not reachable, the caller
+    can fall back to running OCR inline (FastAPI BackgroundTask).
+    """
+    if run_ocr_for_document is None:
+        return None
+    try:
+        result = run_ocr_for_document.delay(str(doc_id))
+        return result.id
+    except Exception:  # noqa: BLE001 - broker unreachable, etc.
+        return None
+

@@ -236,8 +236,14 @@ to a tamper-evident hash-chained ledger.
   unit-tested without Tesseract.
 - `app/workers/ocr_worker.py` — decrypts a document **in memory only**, runs OCR,
   saves `extracted_data` + `confidence_score`, sets status → `ocr_processing`.
-  Runs as a FastAPI BackgroundTask after upload; also exposes a Celery task
-  (`ocr.run_ocr_for_document`) when a broker is configured.
+  Registered as the Celery task `ocr.run_ocr_for_document` (with retry +
+  exponential backoff). The upload endpoint enqueues via `enqueue_ocr()`; if the
+  broker is unreachable it falls back to an in-process FastAPI BackgroundTask.
+- `app/celery_app.py` — central Celery app (Redis broker + result backend),
+  `ocr` queue, sensible time limits. Run the worker with:
+  `celery -A app.celery_app.celery_app worker --loglevel=info -Q ocr`
+  In Docker this is the dedicated **`worker`** service (shares the backend image,
+  the `/data` volume, and `.env`).
 - `app/ledger.py` — SHA-256 hash-chain helpers (`append_entry`, `verify_chain`).
   Each entry hashes its persisted columns + the previous hash, so the chain is
   verifiable from the DB alone.
@@ -264,7 +270,9 @@ to a tamper-evident hash-chained ledger.
 
 ```
 upload (image|pdf)  --> status=pending
-   └─ BackgroundTask: ocr_worker.process_document
+   └─ enqueue_ocr() → Celery task ocr.run_ocr_for_document (queue "ocr")
+        run by the dedicated `worker` container
+        (falls back to an in-process BackgroundTask if the broker is down)
         decrypt in memory → Tesseract(ara+eng) → parse → flags
         --> status=ocr_processing  (ready for human review)
 auditor GET /certification/next → corrects red/yellow → POST .../certify

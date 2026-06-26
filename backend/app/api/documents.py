@@ -127,11 +127,15 @@ async def upload_document(
     await session.commit()
     await session.refresh(doc)
 
-    # Trigger OCR for image/PDF documents (runs after response is sent).
+    # Trigger OCR for image/PDF documents. Prefer the Celery queue; if the
+    # broker is unavailable, fall back to an in-process BackgroundTask so OCR
+    # still happens (degraded mode).
     if file_type in (FileType.image, FileType.pdf):
-        from app.workers.ocr_worker import process_document
+        from app.workers.ocr_worker import enqueue_ocr, process_document
 
-        background_tasks.add_task(process_document, doc.id)
+        task_id = enqueue_ocr(doc.id)
+        if task_id is None:
+            background_tasks.add_task(process_document, doc.id)
 
     return UploadResponse(
         document_id=doc.id,
