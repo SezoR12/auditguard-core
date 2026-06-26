@@ -800,3 +800,40 @@ These appear automatically in any template that binds `occupancy_rate` /
 - `tests/test_phase12_sector_metrics_db.py` — 7-check integration: real-estate
   company → analysis computes occupancy 85% / rental_yield 8% → persisted in the
   snapshot → template engine resolves them → custom-report PDF renders.
+
+---
+
+# AuditCore — Auth Hardening (login rate-limiting + idle timeout)
+
+Completes the deferred Phase-10 hardening item.
+
+## Login rate-limiting (server-side, 5 attempts / 15-min lockout)
+The SPA can authenticate directly with Supabase, which the backend never sees —
+so we added a **rate-limited login proxy**:
+- `POST /auth/login` (backend) forwards the password grant to Supabase
+  server-side. Failed attempts are counted per **email+client-IP** in Redis
+  (`app/services/rate_limit.py`). After `LOGIN_MAX_ATTEMPTS` (default 5) the key
+  is locked for `LOGIN_LOCKOUT_MINUTES` (default 15) → **HTTP 429** with a
+  `Retry-After` header and an Arabic message. A successful login clears the
+  counter. While locked, even a correct password is refused.
+- The frontend `useAuth.login` now calls this proxy and sets the Supabase
+  session from the returned tokens, **falling back** to direct Supabase login if
+  the proxy is unreachable (so a not-yet-deployed backend doesn't block login).
+- Config: `SUPABASE_ANON_KEY` (backend, = the frontend anon key),
+  `LOGIN_MAX_ATTEMPTS`, `LOGIN_LOCKOUT_MINUTES`.
+
+## 15-minute idle session timeout
+`AuthProvider` (frontend) starts a 15-minute inactivity timer when logged in,
+reset on mouse/keyboard/scroll/touch/visibility activity; on expiry it signs the
+user out. Configurable via `SESSION_IDLE_TIMEOUT_MINUTES` (mirrored client-side).
+
+## Verified
+- `tests/test_phase13_auth_hardening.py` — 8 checks (needs Redis): 4 bad
+  attempts → 401 (Arabic, remaining count), 5th → **429 lockout** with
+  `Retry-After`, correct password refused while locked, cleared on success,
+  success returns tokens. Registered in `run_tests.sh` + CI.
+- Full runner: 16 suites / 250 checks pass; frontend tsc + build clean.
+
+> Note: this throttles the backend proxy. Supabase's own public auth endpoint
+> can still be called directly; for defense-in-depth also enable Supabase's
+> built-in auth rate limits in the project dashboard.

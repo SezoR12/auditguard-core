@@ -51,13 +51,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh, loadProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabaseAuditcore.auth.signInWithPassword({ email, password });
-    if (error) {
-      // Surface a normalized Arabic message for invalid creds.
-      const msg = /invalid|credentials|password/i.test(error.message)
-        ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-        : error.message;
-      throw new Error(msg);
+    // Prefer the rate-limited backend proxy; set the Supabase session from the
+    // returned tokens. Fall back to direct Supabase login if the proxy is
+    // unreachable (e.g. backend not deployed yet).
+    try {
+      const tokens = await api.login(email, password);
+      await supabaseAuditcore.auth.setSession({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token ?? "",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      // 429/401 from the proxy carry an Arabic detail — surface it as-is.
+      if (/محاولات|قفل|غير صحيحة/.test(msg)) throw new Error(msg);
+      // Network/HTTP-5xx (proxy down) → fall back to direct Supabase login.
+      const { error } = await supabaseAuditcore.auth.signInWithPassword({ email, password });
+      if (error) {
+        throw new Error(
+          /invalid|credentials|password/i.test(error.message)
+            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+            : error.message,
+        );
+      }
     }
     const me = await api.me();
     setUser(me);
@@ -68,6 +83,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabaseAuditcore.auth.signOut();
     setUser(null);
   }, []);
+
+  // 15-minute inactivity auto-logout (security hardening). Resets on user
+  // activity; only active while logged in.
+  useEffect(() => {
+    if (!user) return;
+    const IDLE_MS = 15 * 60 * 1000;
+    let timer: ReturnType<typeof setTimeout>;
+    const reset = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        void logout();
+      }, IDLE_MS);
+    };
+    const events = ["mousedown", "keydown", "scroll", "touchstart", "visibilitychange"];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [user, logout]);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>

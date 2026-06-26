@@ -41,6 +41,7 @@ jobs:
       SUPABASE_URL: https://test.supabase.co
       SUPABASE_JWT_SECRET: ci-test-secret
       SUPABASE_JWT_AUDIENCE: authenticated
+      SUPABASE_ANON_KEY: ci-anon-key
       SECRET_KEY: ci-secret
       ENCRYPTION_MASTER_KEY: ci-master-key
       REDIS_URL: redis://localhost:6379/0

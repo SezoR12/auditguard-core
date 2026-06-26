@@ -175,7 +175,20 @@ export interface AuditorPerformanceRow {
   efficiency_score: number;
 }
 
+export interface LoginTokens {
+  access_token: string;
+  refresh_token: string | null;
+  token_type: string;
+  expires_in: number | null;
+}
+
 export const api = {
+  // Server-side login proxy (rate-limited). Returns Supabase tokens.
+  login: (email: string, password: string) =>
+    request<LoginTokens>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
   me: () => request<CurrentUser>("/auth/me"),
 
   myUploads: () => request<DocumentItem[]>("/documents/my-uploads"),

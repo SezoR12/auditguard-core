@@ -30,6 +30,9 @@ services:
       SUPABASE_URL: ${SUPABASE_URL}
       SUPABASE_JWT_SECRET: ${SUPABASE_JWT_SECRET}
       SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      # Anon key for the rate-limited /auth/login proxy (same value as the
+      # frontend VITE_AUDITCORE_SUPABASE_ANON_KEY).
+      SUPABASE_ANON_KEY: ${VITE_AUDITCORE_SUPABASE_ANON_KEY}
       SECRET_KEY: ${SECRET_KEY}
       REDIS_URL: redis://redis:6379/0
       # Phase 2: encrypted file storage

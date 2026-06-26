@@ -19,11 +19,21 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_JWT_ALGORITHM: str = "HS256"
     SUPABASE_JWT_AUDIENCE: str = "authenticated"
+    # Anon/publishable key — used by the backend login proxy to call Supabase's
+    # password-grant endpoint server-side (so we can rate-limit attempts).
+    SUPABASE_ANON_KEY: str = ""
 
     # Legacy / app crypto (still used for internal signing if needed)
     SECRET_KEY: str = "dev-insecure-secret-change-me"
 
     REDIS_URL: str = "redis://redis:6379/0"
+
+    # Login rate limiting (Phase 10 hardening): N failures within the window
+    # locks that email+IP for LOGIN_LOCKOUT_MINUTES.
+    LOGIN_MAX_ATTEMPTS: int = 5
+    LOGIN_LOCKOUT_MINUTES: int = 15
+    # Idle session timeout enforced in the SPA (minutes).
+    SESSION_IDLE_TIMEOUT_MINUTES: int = 15
 
     # Notifications / WhatsApp (Phase 8)
     BAILEYS_URL: str = "http://baileys-bridge:3001"
