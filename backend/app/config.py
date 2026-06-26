@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -30,15 +32,19 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
+        user = quote(self.SUPABASE_DB_USER, safe="")
+        pwd = quote(self.SUPABASE_DB_PASSWORD, safe="")
         return (
-            f"postgresql+asyncpg://{self.SUPABASE_DB_USER}:{self.SUPABASE_DB_PASSWORD}"
+            f"postgresql+asyncpg://{user}:{pwd}"
             f"@{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
         )
 
     @property
     def sync_database_url(self) -> str:
+        user = quote(self.SUPABASE_DB_USER, safe="")
+        pwd = quote(self.SUPABASE_DB_PASSWORD, safe="")
         return (
-            f"postgresql+psycopg2://{self.SUPABASE_DB_USER}:{self.SUPABASE_DB_PASSWORD}"
+            f"postgresql+psycopg2://{user}:{pwd}"
             f"@{self.SUPABASE_DB_HOST}:{self.SUPABASE_DB_PORT}/{self.SUPABASE_DB_NAME}"
         )
 
