@@ -22,6 +22,7 @@ celery_app = Celery(
     include=[
         "app.workers.ocr_worker",
         "app.workers.task_worker",
+        "app.workers.analysis_worker",
     ],
 )
 
@@ -43,6 +44,8 @@ celery_app.conf.update(
         "ocr.run_ocr_for_document": {"queue": "ocr"},
         "tasks.generate_daily": {"queue": "tasks"},
         "tasks.check_overdue": {"queue": "tasks"},
+        "analysis.run_daily": {"queue": "analysis"},
+        "analysis.run_for_company": {"queue": "analysis"},
     },
 )
 
@@ -60,5 +63,11 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.check_overdue",
         "schedule": crontab(minute="*/15"),
         "options": {"queue": "tasks"},
+    },
+    "run-daily-analysis-02-baghdad": {
+        "task": "analysis.run_daily",
+        # 23:00 UTC == 02:00 Asia/Baghdad (next day)
+        "schedule": crontab(hour=23, minute=0),
+        "options": {"queue": "analysis"},
     },
 }

@@ -63,8 +63,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       STORAGE_ROOT: /data
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
-    # Celery worker consuming OCR + task queues (Tesseract/poppler are in the image).
-    command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q ocr,tasks
+    # Celery worker consuming OCR + task + analysis queues (Tesseract/poppler in image).
+    command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q ocr,tasks,analysis
     volumes:
       - ./backend:/app
       # Must share the same encrypted storage as the backend.

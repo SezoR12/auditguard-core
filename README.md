@@ -422,3 +422,66 @@ chained (SHA-256), and the Owner can prove no one tampered with history.
 - A full DB integration run (local Postgres, 12 checks) proved: upload →
   certify (doc update + cert insert) → intact verification → **DB tamper →
   verify detects it** (flags the edited entry and the now-broken next link).
+
+---
+
+# AuditCore — Phase 6: The Silent Engine (AI Analytics)
+
+Phase 6 adds the background analytics brain. It runs entirely inside the backend
+container (no external AI APIs), using pandas/numpy/scikit-learn, and writes only
+to RLS-protected tables auditors can never read.
+
+## Modules (`backend/app/ai/`)
+- `common.py` — parse certified `extracted_data.fields` into typed `InvoiceRecord`s
+  (Arabic-digit/amount/date parsing). Pure, testable.
+- `data_quality.py` — DataQualityGuard: duplicate invoice numbers per vendor,
+  missing mandatory fields, out-of-sequence serials, invalid amounts → quality
+  flags + a 0–100 quality score.
+- `anomaly.py` — AnomalyDetector (needs ≥30 docs for baseline): Z-score>3 on
+  amounts, IQR outliers on unit prices, serial-number gaps, weekend spikes
+  (Fri/Sat). → risk_alerts.
+- `cross_reference.py` — CrossReferencer: procurement vs bank outflow (1%
+  tolerance), procurement vs inventory quantities (5% tolerance) → variance
+  findings.
+- `impact.py` — FinancialImpactCalculator: maps anomalies + findings +
+  duplicates to IQD `waste_map_items` (financial/operational/opportunity).
+- `predictor.py` — Predictor: next-month cash outflow (linear regression /
+  moving-average fallback) + inventory consumption rate.
+- `narrative.py` — NarrativeGenerator: template-based Arabic summaries
+  (owner: "تم رصد هدر بقيمة X د.ع …", manager: "يوجد لديك N مهمة تصحيح مفتوحة …").
+- `trust.py` — Trust Index (0–100): `0.6*quality + 0.4*coverage*100 − anomaly_penalty`.
+- `orchestrator.py` — `run_analysis_for_company()` runs steps 1–8 and persists
+  risk_alerts, cross_reference_findings, waste_map_items, analytics_outputs
+  (prediction / narrative / daily_snapshot). Binds a non-auditor RLS role so it
+  can write (and auditors still can't read).
+
+## Scheduling & API
+- Celery task `analysis.run_daily` (queue `analysis`) on Beat at **23:00 UTC ==
+  02:00 Asia/Baghdad**; worker now drains `-Q ocr,tasks,analysis`.
+- `app/workers/analysis_worker.py` — `analysis.run_daily`,
+  `analysis.run_for_company`.
+- `POST /admin/run-analysis?company_id=&inline=true` — manual trigger
+  (owner→own company; admin→any/all). `inline=true` runs in-process for testing;
+  otherwise enqueues Celery.
+
+## New schema (migration 004 + SQL mirror)
+- `cross_reference_findings` table (RLS: auditor-hidden, same policy pattern).
+- `output_type` enum += `prediction`, `narrative`, `daily_snapshot`.
+
+## Acceptance criteria — verified
+- ✅ Certify 10+ invoices → run analysis → `waste_map_items` populated with IQD
+  amounts (integration test: 15 docs → 3 waste items, total 6.66M IQD).
+- ✅ Mismatched procurement vs inventory → `cross_reference_findings` with
+  variance (both procurement_vs_bank and procurement_vs_inventory produced).
+- ✅ Duplicate invoice → flagged → duplicate-payment waste recorded.
+- ✅ Trust Index calculated + stored (snapshot trust_index=95 in the test).
+- ✅ **Auditor account cannot read any AI output table** — verified via RLS:
+  auditor role sees 0 rows in waste_map_items / risk_alerts /
+  cross_reference_findings / analytics_outputs, while owner sees them.
+
+## Tests
+- `backend/tests/test_phase6_ai.py` — 24 pure-logic checks (parsing, quality,
+  anomaly baseline + outliers, cross-ref variance, impact, predictions,
+  narratives, trust index).
+- Full DB integration (local Postgres, 14 checks) incl. the RLS zero-knowledge
+  verification above.

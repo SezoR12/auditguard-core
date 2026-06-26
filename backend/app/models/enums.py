@@ -67,6 +67,9 @@ class OutputType(str, enum.Enum):
     report = "report"
     trust_index = "trust_index"
     summary = "summary"
+    prediction = "prediction"
+    narrative = "narrative"
+    daily_snapshot = "daily_snapshot"
 
 
 class WasteCategory(str, enum.Enum):
