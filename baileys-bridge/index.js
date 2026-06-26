@@ -6,10 +6,14 @@
 //   * Expose POST /send-message {to, message} for the backend to dispatch alerts.
 //   * Expose GET /status and GET /qr for diagnostics.
 //
+// AUTH: /send-message and /qr require the X-Bridge-Token header to match
+// WHATSAPP_BRIDGE_TOKEN. If that env var is unset the bridge logs a CRITICAL
+// warning and those endpoints return 503 (fail-closed) so it can never run
+// unauthenticated by accident. Generate the token in install.sh/setup.sh.
+//
 // The session survives container restarts because the auth folder lives on a
 // persistent volume.
 
-import express from "express";
 import pino from "pino";
 import qrcodeTerminal from "qrcode-terminal";
 import QRCode from "qrcode";
@@ -20,9 +24,19 @@ import {
   fetchLatestBaileysVersion,
 } from "@whiskeysockets/baileys";
 
+import { createApp } from "./app.js";
+
 const PORT = process.env.PORT || 3001;
 const AUTH_DIR = process.env.WHATSAPP_AUTH_DIR || "/data/whatsapp_auth";
+const BRIDGE_TOKEN = process.env.WHATSAPP_BRIDGE_TOKEN || "";
 const logger = pino({ level: process.env.LOG_LEVEL || "info" });
+
+if (!BRIDGE_TOKEN) {
+  logger.error(
+    "CRITICAL: WHATSAPP_BRIDGE_TOKEN is not set — /send-message and /qr will " +
+      "reject all requests (503) until it is configured. See SECURITY.md.",
+  );
+}
 
 let sock = null;
 let connectionState = "disconnected"; // disconnected | connecting | open
@@ -69,49 +83,13 @@ async function startSock() {
   return sock;
 }
 
-function jidFor(to) {
-  // Accept bare numbers or full JIDs.
-  if (to.includes("@")) return to;
-  const digits = String(to).replace(/\D/g, "");
-  return `${digits}@s.whatsapp.net`;
-}
-
-const app = express();
-app.use(express.json());
-
-app.get("/status", (_req, res) => {
-  res.json({ ok: true, state: connectionState, hasQR: Boolean(lastQR) });
-});
-
-// QR as a PNG data URL (for an admin UI to display) or 404 if already linked.
-app.get("/qr", async (_req, res) => {
-  if (!lastQR) {
-    return res.status(404).json({ ok: false, reason: "no_pending_qr", state: connectionState });
-  }
-  try {
-    const dataUrl = await QRCode.toDataURL(lastQR);
-    res.json({ ok: true, qr: dataUrl });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: String(e) });
-  }
-});
-
-app.post("/send-message", async (req, res) => {
-  const { to, message } = req.body || {};
-  if (!to || !message) {
-    return res.status(400).json({ ok: false, reason: "missing_to_or_message" });
-  }
-  if (connectionState !== "open" || !sock) {
-    // Tell the backend we're not ready so it queues for retry.
-    return res.status(503).json({ ok: false, reason: "whatsapp_not_connected", state: connectionState });
-  }
-  try {
-    await sock.sendMessage(jidFor(to), { text: String(message) });
-    res.json({ ok: true });
-  } catch (e) {
-    logger.error(e, "send-message failed");
-    res.status(502).json({ ok: false, error: String(e) });
-  }
+const app = createApp({
+  token: BRIDGE_TOKEN,
+  getState: () => connectionState,
+  getQR: () => lastQR,
+  makeQrDataUrl: (qr) => QRCode.toDataURL(qr),
+  sendMessage: (jid, text) => sock.sendMessage(jid, { text }),
+  logger,
 });
 
 app.listen(PORT, () => logger.info(`baileys-bridge listening on :${PORT}`));

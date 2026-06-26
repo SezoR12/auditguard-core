@@ -98,3 +98,9 @@ jobs:
         run: npx tsc --noEmit
       - name: Build
         run: npm run build
+      - name: Install WhatsApp bridge deps
+        working-directory: baileys-bridge
+        run: npm install --no-audit --no-fund
+      - name: WhatsApp bridge tests (auth)
+        working-directory: baileys-bridge
+        run: npm test

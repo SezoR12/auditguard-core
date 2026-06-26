@@ -38,6 +38,8 @@ services:
       # Phase 2: encrypted file storage
       STORAGE_ROOT: /data
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
+      # Auth for the Baileys bridge (X-Bridge-Token).
+      WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN}
     ports:
       - "8000:8000"
     volumes:
@@ -70,6 +72,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       STORAGE_ROOT: /data
       ENCRYPTION_MASTER_KEY: ${ENCRYPTION_MASTER_KEY}
+      # Worker dispatches WhatsApp via the bridge → needs the shared token.
+      WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN}
     # Celery worker consuming OCR + task + analysis queues (Tesseract/poppler in image).
     command: celery -A app.celery_app.celery_app worker --loglevel=info --concurrency=2 -Q ocr,tasks,analysis,notify
     volumes:
@@ -138,6 +142,7 @@ services:
     environment:
       PORT: "3001"
       WHATSAPP_AUTH_DIR: /data/whatsapp_auth
+      WHATSAPP_BRIDGE_TOKEN: ${WHATSAPP_BRIDGE_TOKEN}
     volumes:
       # Persist the WhatsApp session across restarts (shared /data volume).
       - auditcore_data:/data

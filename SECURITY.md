@@ -12,6 +12,29 @@ All secrets are in `.env` (chmod 600, **never** committed — it's in
 | `SUPABASE_JWT_SECRET` | Verifies Supabase login tokens (HS256 legacy; ES256 tokens verified via JWKS). |
 | `SUPABASE_SERVICE_ROLE_KEY` | Admin API (user creation in seed). **Full DB power — protect it.** |
 | `REDIS_PASSWORD`, `POSTGRES_PASSWORD` | Generated for on-prem/local use. |
+| `WHATSAPP_BRIDGE_TOKEN` | Shared secret authenticating the backend → Baileys bridge (sent as `X-Bridge-Token`). |
+
+## WhatsApp bridge authentication
+
+The Baileys bridge (`baileys-bridge/`) exposes `POST /send-message` (dispatch a
+WhatsApp message from the linked Owner account) and `GET /qr` (the linking QR).
+Both are **protected by a shared secret**: callers must send
+`X-Bridge-Token: <WHATSAPP_BRIDGE_TOKEN>`, which must match the value configured
+on the bridge.
+
+- `install.sh` / `setup.sh` auto-generate `WHATSAPP_BRIDGE_TOKEN` (32 random
+  bytes) into `.env`; `docker-compose.yml` passes it to both the backend/worker
+  and the bridge so they share the same value.
+- The backend attaches the header automatically (`app/services/whatsapp.py`).
+- **Fail-closed:** if `WHATSAPP_BRIDGE_TOKEN` is unset on the bridge, it logs a
+  CRITICAL warning and `/send-message` + `/qr` return **503** — it never serves
+  those endpoints unauthenticated.
+- `GET /status` stays open (liveness/connection state only; no sensitive data).
+- Even on the internal Docker network this prevents any other container (or a
+  network-adjacent attacker) from sending messages or reading the QR.
+
+Verified by `baileys-bridge/test/auth.test.js` (8 checks: missing/wrong/correct
+token, not-connected 503, QR auth, fail-closed when unconfigured), run in CI.
 
 ## Encryption
 
