@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.auth import router as auth_router
 from app.api.documents import router as documents_router
+from app.api.certification import router as certification_router
 from app.api.deps import require_role
 from app.models import User
 
@@ -18,6 +19,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(documents_router)
+app.include_router(certification_router)
 
 
 @app.get("/healthz")

@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +53,7 @@ def _validate_encrypted_json(data: bytes) -> dict:
 
 @router.post("/upload", response_model=UploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     doc_category: str = Form(...),
     branch_id: str | None = Form(None),
@@ -125,6 +126,12 @@ async def upload_document(
     session.add(doc)
     await session.commit()
     await session.refresh(doc)
+
+    # Trigger OCR for image/PDF documents (runs after response is sent).
+    if file_type in (FileType.image, FileType.pdf):
+        from app.workers.ocr_worker import process_document
+
+        background_tasks.add_task(process_document, doc.id)
 
     return UploadResponse(
         document_id=doc.id,

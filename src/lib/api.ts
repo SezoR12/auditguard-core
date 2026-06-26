@@ -124,6 +124,42 @@ export function uploadDocument(
   });
 }
 
+export type FieldFlag = "green" | "yellow" | "red";
+
+export interface ExtractedFields {
+  invoice_number: string | null;
+  date: string | null;
+  amount: string | null;
+  vendor_name: string | null;
+  items_list: Array<{ description: string; value: string }>;
+}
+
+export interface ExtractedData {
+  fields: ExtractedFields;
+  confidences: Record<string, number | null>;
+  color_flags: Record<keyof ExtractedFields, FieldFlag>;
+  overall_confidence: number | null;
+  raw_text?: string;
+}
+
+export interface CertificationDoc {
+  document_id: string;
+  original_filename: string;
+  file_type: string;
+  doc_category: string;
+  confidence_score: number | null;
+  original_image_url: string | null;
+  extracted_data: ExtractedData | null;
+}
+
+export interface CertifyResult {
+  document_id: string;
+  certification_id: string;
+  status: string;
+  ledger_hash: string;
+  message: string;
+}
+
 export const api = {
   login: (email: string, password: string) =>
     request<TokenPair>("/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
@@ -135,4 +171,11 @@ export const api = {
   pendingCertification: () => request<DocumentItem[]>("/documents/pending-certification"),
   companyDocuments: () => request<DocumentItem[]>("/documents/company"),
   uploadDocument,
+
+  nextCertification: () => request<CertificationDoc>("/certification/next"),
+  certify: (docId: string, correctedFields: Record<string, unknown>, isValid: boolean) =>
+    request<CertifyResult>(`/certification/${docId}/certify`, {
+      method: "POST",
+      body: JSON.stringify({ corrected_fields: correctedFields, is_valid: isValid }),
+    }),
 };

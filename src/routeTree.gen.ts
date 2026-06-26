@@ -16,6 +16,7 @@ import { Route as GmRouteImport } from './routes/gm'
 import { Route as AuditorRouteImport } from './routes/auditor'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuditorUploadRouteImport } from './routes/auditor.upload'
+import { Route as AuditorCertifyRouteImport } from './routes/auditor.certify'
 
 const OwnerRoute = OwnerRouteImport.update({
   id: '/owner',
@@ -52,6 +53,11 @@ const AuditorUploadRoute = AuditorUploadRouteImport.update({
   path: '/upload',
   getParentRoute: () => AuditorRoute,
 } as any)
+const AuditorCertifyRoute = AuditorCertifyRouteImport.update({
+  id: '/certify',
+  path: '/certify',
+  getParentRoute: () => AuditorRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
   '/owner': typeof OwnerRoute
+  '/auditor/certify': typeof AuditorCertifyRoute
   '/auditor/upload': typeof AuditorUploadRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
   '/owner': typeof OwnerRoute
+  '/auditor/certify': typeof AuditorCertifyRoute
   '/auditor/upload': typeof AuditorUploadRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/manager': typeof ManagerRoute
   '/owner': typeof OwnerRoute
+  '/auditor/certify': typeof AuditorCertifyRoute
   '/auditor/upload': typeof AuditorUploadRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/manager'
     | '/owner'
+    | '/auditor/certify'
     | '/auditor/upload'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/manager'
     | '/owner'
+    | '/auditor/certify'
     | '/auditor/upload'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/manager'
     | '/owner'
+    | '/auditor/certify'
     | '/auditor/upload'
   fileRoutesById: FileRoutesById
 }
@@ -171,14 +183,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuditorUploadRouteImport
       parentRoute: typeof AuditorRoute
     }
+    '/auditor/certify': {
+      id: '/auditor/certify'
+      path: '/certify'
+      fullPath: '/auditor/certify'
+      preLoaderRoute: typeof AuditorCertifyRouteImport
+      parentRoute: typeof AuditorRoute
+    }
   }
 }
 
 interface AuditorRouteChildren {
+  AuditorCertifyRoute: typeof AuditorCertifyRoute
   AuditorUploadRoute: typeof AuditorUploadRoute
 }
 
 const AuditorRouteChildren: AuditorRouteChildren = {
+  AuditorCertifyRoute: AuditorCertifyRoute,
   AuditorUploadRoute: AuditorUploadRoute,
 }
 

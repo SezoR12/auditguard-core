@@ -216,3 +216,74 @@ The crypto/validation/storage logic is covered by a standalone script that
 verifies: encryption round-trip, on-disk ciphertext is not the original bytes,
 MIME-mismatch rejection, disallowed extensions, and encrypted-JSON structure
 preservation. (See commit notes; run inside the backend venv.)
+
+---
+
+# AuditCore — Phase 3: OCR & Human-in-the-Loop Certification
+
+Phase 3 adds Arabic OCR and the auditor's certification workflow: a background
+worker extracts fields from uploaded invoices, color-codes them by confidence,
+and the auditor reviews a split-screen view (original on the right, fields on the
+left), corrects red/yellow fields, and certifies. Every certification is written
+to a tamper-evident hash-chained ledger.
+
+## What was added
+
+**Backend**
+- `app/ocr.py` — Tesseract (Arabic `ara+eng`) text extraction, invoice field
+  parsing (invoice_number, date, amount, vendor_name, items_list), confidence
+  color-coding (green ≥85, yellow 60–84, red <60/missing). Pure functions are
+  unit-tested without Tesseract.
+- `app/workers/ocr_worker.py` — decrypts a document **in memory only**, runs OCR,
+  saves `extracted_data` + `confidence_score`, sets status → `ocr_processing`.
+  Runs as a FastAPI BackgroundTask after upload; also exposes a Celery task
+  (`ocr.run_ocr_for_document`) when a broker is configured.
+- `app/ledger.py` — SHA-256 hash-chain helpers (`append_entry`, `verify_chain`).
+  Each entry hashes its persisted columns + the previous hash, so the chain is
+  verifiable from the DB alone.
+- `app/api/certification.py` —
+  - `GET /certification/next` → oldest `ocr_processing` doc for the company,
+    with the decrypted original as a base64 data URL + `extracted_data`/flags.
+  - `POST /certification/{doc_id}/certify` → saves corrections, marks
+    `certified`, sets confidence to 100, writes a ledger entry, and calls the
+    (placeholder) AI-analysis trigger.
+
+**Frontend (TanStack Start)**
+- `src/routes/auditor.certify.tsx` — RTL split-screen review. Right: original
+  image/PDF. Left: fields colored by confidence (green editable, yellow warning,
+  red required). The **[تأكيد واعتماد المستند]** button is disabled until all red
+  fields are filled. After certifying, the next document auto-loads
+  (assembly-line). Arabic labels: رقم الفاتورة، التاريخ، المبلغ، اسم المورد، البنود.
+- `src/lib/api.ts` — `nextCertification` + `certify` helpers and types.
+
+**Infra**
+- `backend/Dockerfile` — installs `tesseract-ocr tesseract-ocr-ara poppler-utils`.
+- `requirements.txt` — `pytesseract`, `pdf2image`, `Pillow`.
+
+## Pipeline / status flow
+
+```
+upload (image|pdf)  --> status=pending
+   └─ BackgroundTask: ocr_worker.process_document
+        decrypt in memory → Tesseract(ara+eng) → parse → flags
+        --> status=ocr_processing  (ready for human review)
+auditor GET /certification/next → corrects red/yellow → POST .../certify
+   --> status=certified, confidence=100
+   --> document_certifications row
+   --> audit_ledger entry (action=insert, SHA-256 chained)
+   --> AI-analysis placeholder (no-op; Zero-Knowledge preserved)
+```
+
+## Security notes
+- Decrypted bytes never touch disk — OCR and image display work from in-memory
+  `bytes` / base64 only.
+- The OCR worker binds an `admin` RLS role (not `auditor`), and the certify flow
+  never reads analytics/waste/risk tables — **auditors remain zero-knowledge**.
+
+## Local tests
+- `backend/tests/test_phase3_logic.py` — 17 checks: confidence flagging, Arabic
+  field parsing (incl. Arabic-digit normalization), `extracted_data` shape, and
+  ledger hash-chain validity + tamper/linkage detection. All passing.
+- End-to-end OCR was verified against a rendered Arabic invoice image with real
+  Tesseract 5 + the `ara` language pack (text + confidence extracted; encrypt →
+  store → decrypt → OCR round-trip confirmed; no plaintext written to disk).
