@@ -1,13 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabaseAuditcore } from "@/lib/supabaseClient";
 import { api, type CurrentUser } from "@/lib/api";
+import { loadProfileFromSupabase, PREVIEW_BACKEND_HELP, PreviewBackendUnavailableError } from "@/lib/authPreview";
 
 interface AuthContextValue {
   user: CurrentUser | null;
   loading: boolean;
+  authHint: string | null;
   login: (email: string, password: string) => Promise<CurrentUser>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  clearAuthHint: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -15,19 +18,30 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authHint, setAuthHint] = useState<string | null>(null);
+
+  const clearAuthHint = useCallback(() => setAuthHint(null), []);
 
   const loadProfile = useCallback(async () => {
     const { data } = await supabaseAuditcore.auth.getSession();
     if (!data.session) {
       setUser(null);
+      setAuthHint(null);
       return;
     }
     try {
       setUser(await api.me());
-    } catch {
-      // Token valid but no profile / inactive — sign out to clear state.
-      await supabaseAuditcore.auth.signOut();
-      setUser(null);
+      setAuthHint(null);
+    } catch (err) {
+      try {
+        const fallbackUser = await loadProfileFromSupabase();
+        setUser(fallbackUser);
+        setAuthHint(PREVIEW_BACKEND_HELP);
+      } catch {
+        await supabaseAuditcore.auth.signOut();
+        setUser(null);
+        setAuthHint(err instanceof Error ? err.message : null);
+      }
     }
   }, []);
 
@@ -51,9 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh, loadProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
-    // Prefer the rate-limited backend proxy; set the Supabase session from the
-    // returned tokens. Fall back to direct Supabase login if the proxy is
-    // unreachable (e.g. backend not deployed yet).
+    clearAuthHint();
     try {
       const tokens = await api.login(email, password);
       await supabaseAuditcore.auth.setSession({
@@ -62,36 +74,58 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
-      // 429/401 from the proxy carry an Arabic detail — surface it as-is.
       if (/محاولات|قفل|غير صحيحة/.test(msg)) throw new Error(msg);
-      // Network/HTTP-5xx (proxy down) → fall back to direct Supabase login.
-      const { error } = await supabaseAuditcore.auth.signInWithPassword({ email, password });
-      if (error) {
-        throw new Error(
-          /invalid|credentials|password/i.test(error.message)
-            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-            : error.message,
-        );
+
+      try {
+        const { error } = await supabaseAuditcore.auth.signInWithPassword({ email, password });
+        if (error) {
+          throw new Error(
+            /invalid|credentials|password/i.test(error.message)
+              ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+              : error.message,
+          );
+        }
+      } catch (supabaseErr) {
+        const fallbackMsg = supabaseErr instanceof Error ? supabaseErr.message : "";
+        if (/Failed to fetch|fetch/i.test(fallbackMsg)) {
+          throw new Error(
+            "تعذّر الاتصال بخدمة المصادقة في وضع المعاينة. تأكد من ضبط مفاتيح Supabase في Lovable أو شغّل الخلفية محليًا عبر ./preview-backend.sh أو ./setup.sh.",
+          );
+        }
+        throw supabaseErr;
       }
     }
-    const me = await api.me();
-    setUser(me);
-    return me;
-  }, []);
+
+    try {
+      const me = await api.me();
+      setUser(me);
+      setAuthHint(null);
+      return me;
+    } catch {
+      try {
+        const fallbackUser = await loadProfileFromSupabase();
+        setUser(fallbackUser);
+        setAuthHint(PREVIEW_BACKEND_HELP);
+        return fallbackUser;
+      } catch (fallbackErr) {
+        throw fallbackErr instanceof Error
+          ? fallbackErr
+          : new PreviewBackendUnavailableError();
+      }
+    }
+  }, [clearAuthHint]);
 
   const logout = useCallback(async () => {
-    // Hard-revoke the token server-side (best-effort), then clear the session.
     try {
       await api.logout();
     } catch {
-      /* ignore — proceed to local sign-out regardless */
+      /* ignore */
     }
     await supabaseAuditcore.auth.signOut();
     setUser(null);
+    setAuthHint(null);
   }, []);
 
-  // 15-minute inactivity auto-logout (security hardening). Resets on user
-  // activity; only active while logged in.
   useEffect(() => {
     if (!user) return;
     const IDLE_MS = 15 * 60 * 1000;
@@ -112,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, logout]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, authHint, login, logout, refresh, clearAuthHint }}>
       {children}
     </AuthContext.Provider>
   );
