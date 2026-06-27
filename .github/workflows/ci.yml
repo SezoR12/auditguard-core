@@ -96,6 +96,8 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Type-check
         run: npx tsc --noEmit
+      - name: Unit tests (Vitest + React Testing Library)
+        run: npm test
       - name: Build
         run: npm run build
       - name: Install WhatsApp bridge deps

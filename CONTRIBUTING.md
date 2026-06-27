@@ -69,8 +69,17 @@ Frontend:
 ```bash
 npm install --no-audit --no-fund
 npx tsc --noEmit      # type-check
+npm test              # Vitest + React Testing Library (jsdom)
 npm run build         # production build
 ```
+
+Frontend unit tests live next to the code as `*.test.tsx` and run under
+**Vitest + React Testing Library** (config in `vitest.config.ts`, setup in
+`src/test/setup.ts`). Route guards (`RequireRole`) and components with
+non-trivial logic (`NotificationBell`, `ExportButtons`) and the `useAuth` hook
+have coverage; pure presentational `ui/` primitives don't need tests. Use
+`npm run test:watch` while developing and `npm run test:coverage` for a report.
+The CI `Frontend build + type-check` job runs `npm test` before the build.
 
 ## Before you commit
 
