@@ -1,0 +1,70 @@
+# Dependabot — automated dependency update PRs.
+# Covers the three frontend/backend npm ecosystems, the Python backend, the
+# Docker base images, and GitHub Actions. Weekly cadence, grouped to limit PR
+# noise. See CONTRIBUTING.md → "Dependency security scanning".
+version: 2
+updates:
+  # ---- Frontend (root package.json; project uses bun.lock) ----
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "frontend"]
+    groups:
+      frontend-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # ---- WhatsApp bridge (separate npm package) ----
+  - package-ecosystem: "npm"
+    directory: "/baileys-bridge"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "bridge"]
+    groups:
+      bridge-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # ---- Backend (Python) ----
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "backend"]
+    groups:
+      backend-minor-patch:
+        update-types: ["minor", "patch"]
+
+  # ---- Docker base images ----
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "docker"]
+  - package-ecosystem: "docker"
+    directory: "/baileys-bridge"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "docker"]
+  - package-ecosystem: "docker"
+    directory: "/"
+    # frontend.Dockerfile lives at the repo root.
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "docker"]
+
+  # ---- GitHub Actions ----
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "ci"]

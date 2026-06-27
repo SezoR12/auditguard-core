@@ -38,3 +38,8 @@ backend/.venv/
 
 # Local secrets — never commit
 .env
+
+# npm lockfiles — project uses bun.lock; npm lockfiles are only generated
+# transiently for `npm audit` in CI and must not be committed.
+package-lock.json
+**/package-lock.json

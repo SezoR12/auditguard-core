@@ -91,6 +91,32 @@ The CI `Frontend build + type-check` job runs `npm test` before the build.
   (`001 → 002 → … → 007`). Add SQL mirrors under `db/migrations/*.sql` when the
   change must also be applied by `apply_rls.py` / `ci_setup_testdb.sh`.
 
+## Dependency security scanning
+
+Dependencies are watched two ways:
+
+- **Dependabot** (`.github/dependabot.yml`) opens weekly update PRs for the
+  frontend npm deps, the WhatsApp-bridge npm deps, the Python backend (`pip`),
+  the Docker base images, and GitHub Actions. Review and merge these like any
+  other PR (CI gates them).
+- **CI `Dependency vulnerability scan` job** runs `pip-audit` (backend) and
+  `npm audit --audit-level=high` (frontend + bridge) on every push/PR. It writes
+  a findings summary to the job summary and uploads JSON/markdown reports as
+  build artifacts (`dependency-scan-reports`, 14-day retention).
+
+**Choice — the scan is currently NON-BLOCKING.** It is deliberately *not* one of
+the required status checks, and its steps use `continue-on-error`, so a newly
+disclosed transitive CVE cannot freeze all delivery. The signal still surfaces
+(summary + artifacts + Dependabot PRs). To make it blocking once the backlog of
+known findings is cleared: set the `continue-on-error` flags in the
+`security-scan` job to `false` and add **Dependency vulnerability scan** to the
+branch-protection required checks.
+
+> There is a known backlog of high/critical findings in pinned backend deps
+> (e.g. `python-jose`, `python-multipart`, `cryptography`) — these are tracked
+> for remediation via Dependabot PRs and should be upgraded before flipping the
+> scan to blocking.
+
 ## Commit message convention
 
 ```
