@@ -1,13 +1,36 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { supabaseAuditcore } from "@/lib/supabaseClient";
-import { api, type CurrentUser } from "@/lib/api";
+import { api, ApiError, type CurrentUser } from "@/lib/api";
+import { loadProfileFromSupabase, PREVIEW_BACKEND_HELP, PreviewBackendUnavailableError } from "@/lib/authPreview";
+
+/** Console breadcrumb so each login step (and its status code) is visible in
+ *  devtools. Prefixed for easy filtering. */
+function authLog(step: string, info?: unknown) {
+  if (info instanceof ApiError) {
+    // eslint-disable-next-line no-console
+    console.warn(`[auth] ${step}`, {
+      status: info.status,
+      path: info.path,
+      detail: info.detail,
+      isNetworkError: info.isNetworkError,
+    });
+  } else if (info !== undefined) {
+    // eslint-disable-next-line no-console
+    console.info(`[auth] ${step}`, info);
+  } else {
+    // eslint-disable-next-line no-console
+    console.info(`[auth] ${step}`);
+  }
+}
 
 interface AuthContextValue {
   user: CurrentUser | null;
   loading: boolean;
+  authHint: string | null;
   login: (email: string, password: string) => Promise<CurrentUser>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  clearAuthHint: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -15,19 +38,36 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authHint, setAuthHint] = useState<string | null>(null);
+
+  const clearAuthHint = useCallback(() => setAuthHint(null), []);
 
   const loadProfile = useCallback(async () => {
     const { data } = await supabaseAuditcore.auth.getSession();
     if (!data.session) {
       setUser(null);
+      setAuthHint(null);
       return;
     }
     try {
       setUser(await api.me());
-    } catch {
-      // Token valid but no profile / inactive — sign out to clear state.
-      await supabaseAuditcore.auth.signOut();
-      setUser(null);
+      setAuthHint(null);
+      authLog("loadProfile: /auth/me ok");
+    } catch (err) {
+      // api.me() unreachable/failed is RECOVERABLE: fall back to reading the
+      // profile straight from Supabase and keep the session — never crash.
+      authLog("loadProfile: /auth/me failed → Supabase fallback", err);
+      try {
+        const fallbackUser = await loadProfileFromSupabase();
+        setUser(fallbackUser);
+        setAuthHint(PREVIEW_BACKEND_HELP);
+        authLog("loadProfile: Supabase fallback ok", { role: fallbackUser.role });
+      } catch (fallbackErr) {
+        authLog("loadProfile: Supabase fallback also failed → sign out", fallbackErr);
+        await supabaseAuditcore.auth.signOut();
+        setUser(null);
+        setAuthHint(err instanceof Error ? err.message : null);
+      }
     }
   }, []);
 
@@ -51,47 +91,88 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refresh, loadProfile]);
 
   const login = useCallback(async (email: string, password: string) => {
-    // Prefer the rate-limited backend proxy; set the Supabase session from the
-    // returned tokens. Fall back to direct Supabase login if the proxy is
-    // unreachable (e.g. backend not deployed yet).
+    clearAuthHint();
+    // STEP 1 — obtain a session. Prefer the rate-limited backend proxy; fall
+    // back to direct Supabase auth when the proxy is unreachable.
     try {
+      authLog("login step 1: POST /auth/login (rate-limit proxy)");
       const tokens = await api.login(email, password);
       await supabaseAuditcore.auth.setSession({
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token ?? "",
       });
+      authLog("login step 1: proxy ok, session set");
     } catch (err) {
+      authLog("login step 1: proxy failed", err);
+      // A real auth rejection from the proxy (bad creds / lockout) must surface
+      // as-is — do NOT fall back to a second password attempt.
+      if (err instanceof ApiError && (err.status === 401 || err.status === 429)) {
+        throw new Error(err.detail);
+      }
       const msg = err instanceof Error ? err.message : "";
-      // 429/401 from the proxy carry an Arabic detail — surface it as-is.
       if (/محاولات|قفل|غير صحيحة/.test(msg)) throw new Error(msg);
-      // Network/HTTP-5xx (proxy down) → fall back to direct Supabase login.
-      const { error } = await supabaseAuditcore.auth.signInWithPassword({ email, password });
-      if (error) {
-        throw new Error(
-          /invalid|credentials|password/i.test(error.message)
-            ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
-            : error.message,
-        );
+
+      // STEP 1b — proxy unreachable (network/5xx): try Supabase directly.
+      try {
+        authLog("login step 1b: direct Supabase signInWithPassword");
+        const { error } = await supabaseAuditcore.auth.signInWithPassword({ email, password });
+        if (error) {
+          authLog("login step 1b: Supabase rejected", error.message);
+          throw new Error(
+            /invalid|credentials|password/i.test(error.message)
+              ? "البريد الإلكتروني أو كلمة المرور غير صحيحة"
+              : error.message,
+          );
+        }
+        authLog("login step 1b: Supabase session ok");
+      } catch (supabaseErr) {
+        const fallbackMsg = supabaseErr instanceof Error ? supabaseErr.message : "";
+        if (/Failed to fetch|fetch/i.test(fallbackMsg)) {
+          throw new Error(
+            "تعذّر الاتصال بخدمة المصادقة في وضع المعاينة. تأكد من ضبط مفاتيح Supabase في Lovable أو شغّل الخلفية محليًا عبر ./preview-backend.sh أو ./setup.sh.",
+          );
+        }
+        throw supabaseErr;
       }
     }
-    const me = await api.me();
-    setUser(me);
-    return me;
-  }, []);
+
+    // STEP 2 — resolve the profile. /auth/me failure is RECOVERABLE: read the
+    // profile from Supabase and continue (preview / backend-down mode).
+    try {
+      authLog("login step 2: GET /auth/me");
+      const me = await api.me();
+      setUser(me);
+      setAuthHint(null);
+      authLog("login step 2: /auth/me ok", { role: me.role });
+      return me;
+    } catch (meErr) {
+      authLog("login step 2: /auth/me failed → Supabase fallback", meErr);
+      try {
+        const fallbackUser = await loadProfileFromSupabase();
+        setUser(fallbackUser);
+        setAuthHint(PREVIEW_BACKEND_HELP);
+        authLog("login step 2: Supabase profile fallback ok", { role: fallbackUser.role });
+        return fallbackUser;
+      } catch (fallbackErr) {
+        authLog("login step 2: Supabase profile fallback failed", fallbackErr);
+        throw fallbackErr instanceof Error
+          ? fallbackErr
+          : new PreviewBackendUnavailableError();
+      }
+    }
+  }, [clearAuthHint]);
 
   const logout = useCallback(async () => {
-    // Hard-revoke the token server-side (best-effort), then clear the session.
     try {
       await api.logout();
     } catch {
-      /* ignore — proceed to local sign-out regardless */
+      /* ignore */
     }
     await supabaseAuditcore.auth.signOut();
     setUser(null);
+    setAuthHint(null);
   }, []);
 
-  // 15-minute inactivity auto-logout (security hardening). Resets on user
-  // activity; only active while logged in.
   useEffect(() => {
     if (!user) return;
     const IDLE_MS = 15 * 60 * 1000;
@@ -112,7 +193,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user, logout]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, authHint, login, logout, refresh, clearAuthHint }}>
       {children}
     </AuthContext.Provider>
   );

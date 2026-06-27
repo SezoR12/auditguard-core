@@ -2,8 +2,33 @@
 // Auth: bearer token comes from the Supabase session, not a local-only JWT.
 import { supabaseAuditcore } from "@/lib/supabaseClient";
 
-const API_URL =
+export const API_URL =
   (import.meta.env.VITE_AUDITCORE_API_URL as string | undefined) ?? "http://localhost:8000";
+
+/**
+ * Structured error for backend calls. Carries the HTTP status (0 = network /
+ * unreachable), the request path, and a human-readable detail, so callers can
+ * surface the actual failing step + status code (toast / console) instead of a
+ * bare string.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly path: string;
+  readonly detail: string;
+  /** True when the request never got an HTTP response (DNS/connection/CORS). */
+  readonly isNetworkError: boolean;
+
+  constructor(params: { status: number; path: string; detail: string }) {
+    // message == detail so existing `err.message` UIs keep showing the clean
+    // (Arabic) text; status/path are carried separately for logging + toasts.
+    super(params.detail);
+    this.name = "ApiError";
+    this.status = params.status;
+    this.path = params.path;
+    this.detail = params.detail;
+    this.isNetworkError = params.status === 0;
+  }
+}
 
 async function getAccessToken(): Promise<string | null> {
   const { data } = await supabaseAuditcore.auth.getSession();
@@ -16,16 +41,25 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const token = await getAccessToken();
   if (token) headers.set("Authorization", `Bearer ${token}`);
 
-  const res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}${path}`, { ...init, headers });
+  } catch (err) {
+    // Network-level failure: backend down, DNS, CORS, offline. status = 0.
+    const detail =
+      err instanceof Error ? err.message : "تعذّر الاتصال بالخادم (الخلفية غير متاحة)";
+    throw new ApiError({ status: 0, path, detail });
+  }
+
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
     try {
       const body = await res.json();
       if (body?.detail) detail = body.detail;
     } catch {
-      /* ignore */
+      /* non-JSON error body */
     }
-    throw new Error(detail);
+    throw new ApiError({ status: res.status, path, detail });
   }
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;

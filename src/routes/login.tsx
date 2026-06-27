@@ -1,6 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useAuth, roleHomePath } from "@/hooks/useAuth";
+import { API_URL, ApiError } from "@/lib/api";
+import { getPreviewAuthStatus, PREVIEW_BACKEND_HELP } from "@/lib/authPreview";
+import { checkBackendHealth } from "@/lib/backendHealth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "تسجيل الدخول — AuditCore" }] }),
@@ -8,12 +12,15 @@ export const Route = createFileRoute("/login")({
 });
 
 function LoginPage() {
-  const { user, loading, login } = useAuth();
+  const { user, loading, login, authHint, clearAuthHint } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [previewWarning, setPreviewWarning] = useState<string | null>(null);
+  const [seedGuidance, setSeedGuidance] = useState<string | null>(null);
+  const [seededEmails, setSeededEmails] = useState<string[]>([]);
 
   useEffect(() => {
     if (!loading && user) {
@@ -21,15 +28,83 @@ function LoginPage() {
     }
   }, [user, loading, navigate]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        // Deep health probe (db/redis/rls) drives the full vs Supabase-only mode.
+        const health = await checkBackendHealth(API_URL);
+        const status = await getPreviewAuthStatus(API_URL);
+        if (cancelled) return;
+
+        if (!health.reachable) {
+          console.warn("[login] backend unreachable → Supabase-only mode", {
+            httpStatus: health.httpStatus,
+            error: health.error,
+          });
+          setPreviewWarning(PREVIEW_BACKEND_HELP);
+        } else {
+          if (health.status === "degraded") {
+            console.warn("[login] backend reachable but degraded", health.checks);
+          }
+          setPreviewWarning(null);
+        }
+
+        setSeededEmails(status.availableSeedEmails);
+        if (!status.seededUsersFound) {
+          setSeedGuidance(
+            "لم يتم العثور على المستخدمين التجريبيين في Supabase. شغّل ./setup.sh أو python backend/scripts/seed.py بعد ضبط SUPABASE_URL و SUPABASE_SERVICE_ROLE_KEY.",
+          );
+        } else {
+          setSeedGuidance(null);
+        }
+      } catch {
+        if (cancelled) return;
+        setPreviewWarning(
+          "بيئة Lovable لا تستطيع الوصول إلى FastAPI أو Supabase بالإعدادات الحالية. تحقّق من VITE_AUDITCORE_SUPABASE_URL و VITE_AUDITCORE_SUPABASE_ANON_KEY، أو شغّل الخلفية محليًا.",
+        );
+        setSeedGuidance(
+          "إذا كنت تعمل من Lovable فقط، تأكد من حقن متغيرات Supabase الصحيحة. وإذا كنت تعمل محليًا، شغّل ./preview-backend.sh أو ./setup.sh ثم أعد المحاولة.",
+        );
+        setSeededEmails([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    clearAuthHint();
     setSubmitting(true);
     try {
       const me = await login(email, password);
+      toast.success(`مرحباً ${me.full_name}`);
       void navigate({ to: roleHomePath(me.role) });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "فشل تسجيل الدخول");
+      // Surface the ACTUAL failing step + status code (console + toast) so the
+      // failure is debuggable, not just a generic "login failed".
+      const message = err instanceof Error ? err.message : "فشل تسجيل الدخول";
+      setError(message);
+      if (err instanceof ApiError) {
+        console.error("[login] failed", {
+          step: err.path,
+          status: err.status,
+          detail: err.detail,
+          networkError: err.isNetworkError,
+        });
+        const code = err.isNetworkError ? "تعذّر الاتصال" : `رمز ${err.status}`;
+        toast.error("فشل تسجيل الدخول", {
+          description: `${err.path} — ${code}: ${err.detail}`,
+        });
+      } else {
+        console.error("[login] failed", err);
+        toast.error("فشل تسجيل الدخول", { description: message });
+      }
     } finally {
       setSubmitting(false);
     }
@@ -42,6 +117,56 @@ function LoginPage() {
         <p className="mt-1 text-sm text-muted-foreground">منصة التدقيق الداخلي</p>
 
         <form onSubmit={onSubmit} className="mt-6 space-y-4 text-right">
+          {previewWarning && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-3 text-sm text-amber-900 dark:text-amber-200">
+              <div className="font-medium">تنبيه وضع المعاينة</div>
+              <div className="mt-1">{previewWarning}</div>
+              <div className="mt-2 text-xs opacity-80">
+                اقتراح: شغّل <code>./preview-backend.sh</code> أو <code>./setup.sh</code> لتفعيل FastAPI محليًا، أو استمر في وضع Supabase فقط.
+              </div>
+            </div>
+          )}
+
+          {seedGuidance && (
+            <div className="rounded-md border border-blue-500/40 bg-blue-500/10 px-3 py-3 text-sm text-blue-900 dark:text-blue-200">
+              <div className="font-medium">إرشادات التهيئة الأولية</div>
+              <div className="mt-1">{seedGuidance}</div>
+              <div className="mt-2 text-xs opacity-80">
+                بعد تشغيل seed ستظهر الحسابات التجريبية الجاهزة لتسجيل الدخول.
+              </div>
+            </div>
+          )}
+
+          {!seedGuidance && seededEmails.length > 0 && (
+            <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-3 text-emerald-900 dark:text-emerald-200">
+              <div className="font-medium text-sm">الحسابات التجريبية الجاهزة</div>
+              <div className="mt-1 text-xs opacity-80">
+                تم العثور على مستخدمين تجريبيين في Supabase. يمكنك استخدام أحد الحسابات التالية:
+              </div>
+              <div className="mt-3 space-y-2 text-xs">
+                {[
+                  { role: "المالك", email: "owner@auditcore.local", password: "Owner123!" },
+                  { role: "المدير العام", email: "gm@auditcore.local", password: "Gm123!" },
+                  { role: "مدير الفرع", email: "manager@auditcore.local", password: "Manager123!" },
+                  { role: "المدقق", email: "auditor@auditcore.local", password: "Auditor123!" },
+                ]
+                  .filter((account) => seededEmails.includes(account.email))
+                  .map((account) => (
+                    <div key={account.email} className="rounded-md border border-emerald-500/20 bg-white/50 px-3 py-2 dark:bg-black/10">
+                      <div className="font-medium">{account.role}</div>
+                      <div className="mt-1 font-mono break-all">{account.email}</div>
+                      <div className="mt-1 font-mono">{account.password}</div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {authHint && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-200">
+              {authHint}
+            </div>
+          )}
           <div>
             <label htmlFor="email" className="mb-1 block text-sm font-medium text-foreground">
               البريد الإلكتروني
