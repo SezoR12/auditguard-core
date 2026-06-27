@@ -2,7 +2,7 @@
 // Auth: bearer token comes from the Supabase session, not a local-only JWT.
 import { supabaseAuditcore } from "@/lib/supabaseClient";
 
-const API_URL =
+export const API_URL =
   (import.meta.env.VITE_AUDITCORE_API_URL as string | undefined) ?? "http://localhost:8000";
 
 async function getAccessToken(): Promise<string | null> {
