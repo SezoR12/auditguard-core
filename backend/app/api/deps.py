@@ -16,6 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="supabase-auth", auto_error=False)
 UNAUTHORIZED_AR = "غير مصرح بالوصول - يجب تسجيل الدخول"
 NO_PROFILE_AR = "لا يوجد ملف مستخدم مرتبط بهذا الحساب"
 FORBIDDEN_AR = "ليس لديك الصلاحية للوصول إلى هذا المورد"
+AUTH_DEGRADED_AR = "خدمة التحقق غير متاحة حالياً، حاول لاحقاً"
 
 
 async def get_current_user(
@@ -33,9 +34,15 @@ async def get_current_user(
     # Hard revocation: reject denied / revoked tokens (server-side denylist).
     from app.services import token_denylist
 
-    if await token_denylist.is_denied(
-        token, sub=payload.get("sub"), iat=payload.get("iat")
-    ):
+    try:
+        denied = await token_denylist.is_denied(
+            token, sub=payload.get("sub"), iat=payload.get("iat")
+        )
+    except token_denylist.DenylistUnavailable:
+        # Fail-closed mode + Redis down: 503 (distinct from a 401 bad token) so
+        # clients/monitoring can tell "auth service degraded" from "bad creds".
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=AUTH_DEGRADED_AR)
+    if denied:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail=UNAUTHORIZED_AR)
 
     # Bootstrap RLS context with the JWT identity BEFORE the profile lookup, so

@@ -7,8 +7,13 @@ Two revocation modes:
      token issued (`iat`) at/under that time is rejected. Useful to log a user
      out of ALL sessions (e.g. after password reset / suspected compromise).
 
-Checked in get_current_user on every request. Fails OPEN if Redis is down
-(availability over hard-revocation) — tune if you need fail-closed.
+Checked in get_current_user on every request. When Redis is unreachable the
+behaviour is controlled by settings.TOKEN_DENYLIST_FAIL_CLOSED:
+  * False (default) → fail OPEN: the token is allowed (availability over
+    hard-revocation).
+  * True → fail CLOSED: is_denied raises DenylistUnavailable, and
+    get_current_user rejects the request with 503 (distinct from a 401 "bad
+    token") so callers can tell "auth service degraded" from "invalid creds".
 """
 from __future__ import annotations
 
@@ -21,6 +26,10 @@ from app.config import settings
 
 _TOKEN_PREFIX = "denylist:token:"
 _USER_PREFIX = "denylist:user:"  # value = unix ts; tokens with iat <= ts denied
+
+
+class DenylistUnavailable(RuntimeError):
+    """Raised by is_denied when Redis is unreachable and fail-closed is enabled."""
 
 
 def _redis() -> aioredis.Redis:
@@ -62,7 +71,11 @@ async def is_denied(token: str, *, sub: str | None = None, iat: int | None = Non
             if cutoff is not None and iat is not None and int(iat) <= int(cutoff):
                 return True
         return False
-    except Exception:  # noqa: BLE001 - Redis down -> fail open (don't lock everyone out)
+    except Exception as exc:  # noqa: BLE001 - Redis unreachable
+        if settings.TOKEN_DENYLIST_FAIL_CLOSED:
+            # Fail CLOSED: can't verify revocation → reject (503 upstream).
+            raise DenylistUnavailable(str(exc)) from exc
+        # Fail OPEN: don't lock everyone out during a Redis outage.
         return False
     finally:
         try:

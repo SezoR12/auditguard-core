@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     LOGIN_LOCKOUT_MINUTES: int = 15
     # Idle session timeout enforced in the SPA (minutes).
     SESSION_IDLE_TIMEOUT_MINUTES: int = 15
+    # Token denylist behaviour when Redis is unreachable:
+    #   False (default) → fail OPEN (token allowed; availability over revocation)
+    #   True            → fail CLOSED (request rejected with 503)
+    TOKEN_DENYLIST_FAIL_CLOSED: bool = False
 
     # Notifications / WhatsApp (Phase 8)
     BAILEYS_URL: str = "http://baileys-bridge:3001"

@@ -43,6 +43,8 @@ services:
       # Deployment env: in production the app refuses to start on a BYPASSRLS role.
       ENVIRONMENT: ${ENVIRONMENT:-development}
       ALLOW_RLS_BYPASS: ${ALLOW_RLS_BYPASS:-false}
+      # Token denylist Redis-outage policy (false=fail-open, true=fail-closed).
+      TOKEN_DENYLIST_FAIL_CLOSED: ${TOKEN_DENYLIST_FAIL_CLOSED:-false}
     ports:
       - "8000:8000"
     volumes:

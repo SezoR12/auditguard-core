@@ -904,12 +904,15 @@ Beyond the client idle-logout, tokens can be hard-revoked server-side
 - `POST /auth/revoke-user/{auth_user_id}` (owner/admin) — revokes ALL of a
   user's sessions by setting a "revoke before" cutoff; any token with
   `iat <= cutoff` is rejected. Use after password reset / suspected compromise.
-- Fails **open** if Redis is unavailable (availability over revocation) — change
-  in `is_denied` if you need fail-closed.
+- **Redis-outage behaviour** is controlled by `TOKEN_DENYLIST_FAIL_CLOSED`
+  (default `false`): fail **open** (token allowed — availability over
+  revocation) or, when `true`, fail **closed** (request rejected with `503`,
+  distinct from a `401` bad token). See SECURITY.md for the tradeoff and the
+  recommended production setting.
 
-Verified: `tests/test_phase13_token_denylist_db.py` — 6 checks (token revoke →
+Verified: `tests/test_phase13_token_denylist_db.py` — 9 checks (token revoke →
 401, fresh token still valid, user-wide revoke kills existing sessions, tokens
-issued after the cutoff accepted). Full runner: 17 suites / 256 checks pass.
+issued after the cutoff accepted, and Redis-outage fail-open/fail-closed paths).
 
 > For defense-in-depth, also enable Supabase's built-in auth rate limits in the
 > project dashboard (Authentication → Rate Limits) — those guard Supabase's own
