@@ -106,3 +106,67 @@ jobs:
       - name: WhatsApp bridge tests (auth)
         working-directory: baileys-bridge
         run: npm test
+
+  security-scan:
+    name: Dependency vulnerability scan
+    runs-on: ubuntu-latest
+    # NON-BLOCKING: this job reports high/critical findings (job summary +
+    # uploaded artifacts) but does NOT gate merges — it is intentionally left
+    # out of the required status checks so a newly-disclosed transitive CVE
+    # can't freeze all delivery. Dependabot opens the fix PRs. See
+    # CONTRIBUTING.md → "Dependency security scanning". Flip the
+    # `continue-on-error` flags to false (and add it to branch protection) to
+    # make it blocking.
+    steps:
+      - uses: actions/checkout@v4
+
+      # ---- Python (backend) ----
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pip-audit
+        run: python -m pip install --upgrade pip pip-audit
+      - name: pip-audit (backend)
+        id: pipaudit
+        continue-on-error: true
+        run: |
+          echo "## pip-audit (backend)" >> "$GITHUB_STEP_SUMMARY"
+          pip-audit -r backend/requirements.txt \
+            --desc --format markdown --output backend-pip-audit.md \
+            --vulnerability-service osv || echo "pip-audit found issues (non-blocking)"
+          cat backend-pip-audit.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      # ---- npm (frontend + bridge) ----
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: npm audit (frontend)
+        continue-on-error: true
+        run: |
+          echo "## npm audit (frontend, high+)" >> "$GITHUB_STEP_SUMMARY"
+          # Project uses bun.lock; generate an npm lockfile just for auditing.
+          npm install --package-lock-only --no-audit --no-fund
+          npm audit --audit-level=high --json > frontend-npm-audit.json || \
+            echo "npm audit found high/critical issues (non-blocking)"
+          npm audit --audit-level=high >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+      - name: npm audit (WhatsApp bridge)
+        working-directory: baileys-bridge
+        continue-on-error: true
+        run: |
+          echo "## npm audit (baileys-bridge, high+)" >> "$GITHUB_STEP_SUMMARY"
+          npm install --package-lock-only --no-audit --no-fund
+          npm audit --audit-level=high --json > bridge-npm-audit.json || \
+            echo "npm audit found high/critical issues (non-blocking)"
+          npm audit --audit-level=high >> "$GITHUB_STEP_SUMMARY" 2>&1 || true
+
+      - name: Upload scan reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-scan-reports
+          path: |
+            backend-pip-audit.md
+            frontend-npm-audit.json
+            baileys-bridge/bridge-npm-audit.json
+          if-no-files-found: ignore
+          retention-days: 14
