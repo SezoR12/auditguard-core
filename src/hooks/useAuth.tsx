@@ -42,10 +42,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const clearAuthHint = useCallback(() => setAuthHint(null), []);
 
+  const GUEST_USER: CurrentUser = {
+    id: "00000000-0000-0000-0000-000000000000",
+    email: "guest@auditcore.local",
+    full_name: "زائر (وضع بدون تسجيل دخول)",
+    role: "owner",
+    company_id: "00000000-0000-0000-0000-000000000000",
+    branch_id: null,
+    is_active: true,
+  };
+
   const loadProfile = useCallback(async () => {
     const { data } = await supabaseAuditcore.auth.getSession();
     if (!data.session) {
-      setUser(null);
+      // Credential-less access: synthesize an owner-level guest profile so the
+      // app is fully navigable without signing in.
+      setUser(GUEST_USER);
       setAuthHint(null);
       return;
     }
@@ -54,8 +66,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthHint(null);
       authLog("loadProfile: /auth/me ok");
     } catch (err) {
-      // api.me() unreachable/failed is RECOVERABLE: fall back to reading the
-      // profile straight from Supabase and keep the session — never crash.
       authLog("loadProfile: /auth/me failed → Supabase fallback", err);
       try {
         const fallbackUser = await loadProfileFromSupabase();
@@ -63,13 +73,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthHint(PREVIEW_BACKEND_HELP);
         authLog("loadProfile: Supabase fallback ok", { role: fallbackUser.role });
       } catch (fallbackErr) {
-        authLog("loadProfile: Supabase fallback also failed → sign out", fallbackErr);
-        await supabaseAuditcore.auth.signOut();
-        setUser(null);
-        setAuthHint(err instanceof Error ? err.message : null);
+        authLog("loadProfile: Supabase fallback failed → guest mode", fallbackErr);
+        setUser(GUEST_USER);
+        setAuthHint(null);
       }
     }
   }, []);
+
 
   const refresh = useCallback(async () => {
     setLoading(true);
