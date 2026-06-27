@@ -1,8 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { useAuth, roleHomePath } from "@/hooks/useAuth";
-import { API_URL } from "@/lib/api";
+import { API_URL, ApiError } from "@/lib/api";
 import { getPreviewAuthStatus, PREVIEW_BACKEND_HELP } from "@/lib/authPreview";
+import { checkBackendHealth } from "@/lib/backendHealth";
 
 export const Route = createFileRoute("/login")({
   head: () => ({ meta: [{ title: "تسجيل الدخول — AuditCore" }] }),
@@ -31,12 +33,21 @@ function LoginPage() {
 
     void (async () => {
       try {
+        // Deep health probe (db/redis/rls) drives the full vs Supabase-only mode.
+        const health = await checkBackendHealth(API_URL);
         const status = await getPreviewAuthStatus(API_URL);
         if (cancelled) return;
 
-        if (!status.backendReachable) {
+        if (!health.reachable) {
+          console.warn("[login] backend unreachable → Supabase-only mode", {
+            httpStatus: health.httpStatus,
+            error: health.error,
+          });
           setPreviewWarning(PREVIEW_BACKEND_HELP);
         } else {
+          if (health.status === "degraded") {
+            console.warn("[login] backend reachable but degraded", health.checks);
+          }
           setPreviewWarning(null);
         }
 
@@ -72,9 +83,28 @@ function LoginPage() {
     setSubmitting(true);
     try {
       const me = await login(email, password);
+      toast.success(`مرحباً ${me.full_name}`);
       void navigate({ to: roleHomePath(me.role) });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "فشل تسجيل الدخول");
+      // Surface the ACTUAL failing step + status code (console + toast) so the
+      // failure is debuggable, not just a generic "login failed".
+      const message = err instanceof Error ? err.message : "فشل تسجيل الدخول";
+      setError(message);
+      if (err instanceof ApiError) {
+        console.error("[login] failed", {
+          step: err.path,
+          status: err.status,
+          detail: err.detail,
+          networkError: err.isNetworkError,
+        });
+        const code = err.isNetworkError ? "تعذّر الاتصال" : `رمز ${err.status}`;
+        toast.error("فشل تسجيل الدخول", {
+          description: `${err.path} — ${code}: ${err.detail}`,
+        });
+      } else {
+        console.error("[login] failed", err);
+        toast.error("فشل تسجيل الدخول", { description: message });
+      }
     } finally {
       setSubmitting(false);
     }
