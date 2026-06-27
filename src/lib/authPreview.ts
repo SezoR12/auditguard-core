@@ -60,7 +60,7 @@ export async function findAvailableSeedUsers(): Promise<string[]> {
     }),
   );
 
-  return checks.filter((email): email is string => Boolean(email));
+  return checks.filter((email): email is (typeof SEED_EMAILS)[number] => Boolean(email));
 }
 
 export async function loadProfileFromSupabase(): Promise<CurrentUser> {
