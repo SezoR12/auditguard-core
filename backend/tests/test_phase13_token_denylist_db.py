@@ -48,6 +48,33 @@ async def main():
         tok3=mint(sub,email,iat=int(time.time())+10)
         r=await ac.get("/auth/me", headers={"Authorization":f"Bearer {tok3}"})
         ck("token issued after revoke -> 200", r.status_code==200)
+
+        # ── Redis-outage behaviour (fail-open vs fail-closed) ────────────────
+        # Simulate Redis being unreachable by making the client raise on use.
+        class _Boom:
+            def __getattr__(self, _):
+                raise RuntimeError("redis down")
+        orig_redis = token_denylist._redis
+        orig_fc = settings.TOKEN_DENYLIST_FAIL_CLOSED
+        token_denylist._redis = lambda: _Boom()
+        tok4 = mint(sub, email, iat=int(time.time()) + 20)
+        try:
+            # Fail OPEN (default): request still succeeds despite Redis down.
+            settings.TOKEN_DENYLIST_FAIL_CLOSED = False
+            r = await ac.get("/auth/me", headers={"Authorization": f"Bearer {tok4}"})
+            ck("redis down + fail-open -> 200", r.status_code == 200)
+            # Fail CLOSED: request rejected with 503 (not 401).
+            settings.TOKEN_DENYLIST_FAIL_CLOSED = True
+            r = await ac.get("/auth/me", headers={"Authorization": f"Bearer {tok4}"})
+            ck("redis down + fail-closed -> 503", r.status_code == 503)
+            ck("fail-closed 503 detail is Arabic", "خدمة" in r.json().get("detail", ""))
+        finally:
+            token_denylist._redis = orig_redis
+            settings.TOKEN_DENYLIST_FAIL_CLOSED = orig_fc
+
+        # After Redis is restored, the token is accepted again.
+        r = await ac.get("/auth/me", headers={"Authorization": f"Bearer {tok4}"})
+        ck("redis restored -> 200", r.status_code == 200)
     print(f"\n=== {len(P)} passed, {len(F)} failed ===")
     return 1 if F else 0
 import sys as _s; _s.exit(asyncio.run(main()))

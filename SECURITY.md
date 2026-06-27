@@ -225,6 +225,32 @@ lifespan). Behaviour by `ENVIRONMENT`:
 Covered by `backend/tests/test_phase15_rls_startup_guard.py` (7 checks: both
 bypass states × env × escape hatch, plus the DB-unreachable path).
 
+## Token revocation & denylist (Redis-outage policy)
+
+Access tokens can be hard-revoked server-side via a Redis denylist
+(`app/services/token_denylist.py`), checked in `get_current_user` on every
+request: per-token (`POST /auth/logout`) and per-user "revoke all sessions"
+(`POST /auth/revoke-user/{auth_user_id}`).
+
+When **Redis is unreachable**, the check can't be evaluated, so behaviour is a
+deliberate availability-vs-security tradeoff, controlled by
+`TOKEN_DENYLIST_FAIL_CLOSED` (default `false`):
+
+| Setting | Redis down → | Effect |
+|---|---|---|
+| `false` (default) — **fail OPEN** | request proceeds | Revoked tokens are momentarily honoured during the outage, but legitimate users keep working. |
+| `true` — **fail CLOSED** | request rejected with **503** (`خدمة التحقق غير متاحة حالياً`) | A revoked token can never slip through, but a Redis outage takes down all authenticated traffic. The 503 (vs a 401) lets clients/monitoring distinguish "auth degraded" from "bad credentials". |
+
+**Recommendation:** keep `false` for most deployments (Redis here is also the
+Celery broker, so a Redis outage already degrades the system; locking out all
+auth on top of that is usually worse than briefly honouring a just-revoked
+token). Set `true` only for high-assurance tenants where instant revocation
+under all conditions outweighs availability — and pair it with a highly
+available Redis.
+
+Verified by `tests/test_phase13_token_denylist_db.py` (9 checks, incl. a
+simulated Redis outage exercising both fail-open `200` and fail-closed `503`).
+
 ## Tamper-proof audit ledger
 
 Every critical action is appended to `audit_ledger` as a SHA-256 hash chain
