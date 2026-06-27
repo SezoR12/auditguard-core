@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
       - name: Install deps
@@ -137,7 +137,7 @@ jobs:
           cat backend-pip-audit.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
 
       # ---- npm (frontend + bridge) ----
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
       - name: npm audit (frontend)
