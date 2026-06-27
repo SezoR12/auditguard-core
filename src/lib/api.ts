@@ -48,10 +48,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     res = await fetch(`${API_URL}${path}`, { ...init, headers });
   } catch (err) {
     // Network-level failure: backend down, DNS, CORS, offline. status = 0.
+    // In preview (no Docker FastAPI), fall back to mock data so the UI works.
+    const mock = previewMockFor(path);
+    if (mock !== undefined) {
+      console.warn(`[api] backend unreachable, using preview mock for ${path}`);
+      return mock as T;
+    }
     const detail =
       err instanceof Error ? err.message : "تعذّر الاتصال بالخادم (الخلفية غير متاحة)";
     throw new ApiError({ status: 0, path, detail });
   }
+
 
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
