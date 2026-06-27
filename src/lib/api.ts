@@ -1,9 +1,11 @@
 // Thin fetch wrapper for the FastAPI backend.
 // Auth: bearer token comes from the Supabase session, not a local-only JWT.
 import { supabaseAuditcore } from "@/lib/supabaseClient";
+import { previewMockFor } from "@/lib/previewMocks";
 
 export const API_URL =
   (import.meta.env.VITE_AUDITCORE_API_URL as string | undefined) ?? "http://localhost:8000";
+
 
 /**
  * Structured error for backend calls. Carries the HTTP status (0 = network /
